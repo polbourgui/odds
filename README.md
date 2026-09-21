@@ -10,11 +10,11 @@ cotes à une référence sharp, calcul d'edge et de mise Kelly, suivi de paris f
 
 ## État du projet
 
-Livraison en cours par étapes (voir le brief). Étape actuelle : **1/6 — schéma de
-base de données et module de calcul**.
+Livraison en cours par étapes (voir le brief). Étape actuelle : **2/6 — adaptateur de
+cotes et stockage des snapshots**.
 
 - [x] 1. Schéma BDD, module de calcul et tests
-- [ ] 2. Adaptateur de cotes fonctionnel et stockage des snapshots
+- [x] 2. Adaptateur de cotes fonctionnel et stockage des snapshots
 - [ ] 3. API et tableau des value bets
 - [ ] 4. Paper betting et capture de clôture
 - [ ] 5. Statistiques, réglages, export
@@ -28,6 +28,8 @@ backend/
     core/          # configuration, module de calcul pur (devig, edge, Kelly, CLV)
     db/             # base SQLAlchemy déclarative, session
     models/         # schéma de données (sports, événements, cotes, paper bets, ...)
+    providers/      # interface OddsProvider + adaptateur The Odds API
+    services/       # normalisation, rapprochement d'événements, ingestion des cotes
   migrations/       # Alembic
   tests/            # pytest
 frontend/           # React + TypeScript + Vite (à venir)
@@ -41,6 +43,37 @@ Fonctions pures, sans dépendance DB/réseau :
 - `devig_multiplicative`, `devig_power`, `devig_shin` (dévigage de la référence sharp)
 - `edge`, `kelly_fraction_full`, `kelly_stake` (Kelly fractionné, plafonné, seuil d'edge)
 - `clv` (closing line value)
+
+## Adaptateur de cotes et rapprochement (`app/providers/`, `app/services/`)
+
+- `OddsProvider` (`app/providers/base.py`) : interface abstraite (`fetch_events`,
+  `fetch_odds`) que tout adaptateur implémente. Le reste de l'application ne dépend
+  jamais du format JSON brut d'une source — uniquement des schémas Pydantic exposés
+  ici (`ProviderEvent`, `ProviderEventOdds`, ...).
+- `TheOddsApiProvider` (`app/providers/the_odds_api.py`) : premier adaptateur, basé sur
+  [The Odds API](https://the-odds-api.com). Marchés V1 mappés : `h2h` → 1X2 (3 issues)
+  ou vainqueur (2 issues, tennis/NBA), `totals` → over/under. Gestion des erreurs
+  (401/403, 429 avec quota restant, timeout) via des exceptions typées et des logs
+  clairs (`app/providers/exceptions.py`).
+- `EventReconciler` (`app/services/reconciliation.py`) : rapproche les événements et
+  participants entre sources par normalisation du nom (`app/services/normalization.py`
+  — accents, casse, suffixes de club), puis repli sur une correspondance approximative
+  (ratio `difflib`), avec une table d'alias éditable (`participant_aliases`,
+  `competition_aliases`) qui prend toujours la priorité et peut être corrigée à la main.
+- `OddsIngestionService` (`app/services/odds_ingestion.py`) : récupère les cotes via un
+  provider, rapproche l'événement/la sélection, et insère un `OddsSnapshot` horodaté
+  par (sélection, bookmaker) — jamais d'écrasement, historique complet pour le CLV.
+
+### Ajouter un nouvel adaptateur
+
+1. Créer une classe héritant de `OddsProvider` sous `app/providers/`, implémentant
+   `fetch_events` et `fetch_odds` et renvoyant les schémas `ProviderEvent` /
+   `ProviderEventOdds` définis dans `app/providers/base.py`.
+2. Lever les exceptions de `app/providers/exceptions.py` (`ProviderAuthError`,
+   `ProviderQuotaExceededError`, `ProviderTimeoutError`, ...) plutôt que de laisser
+   fuiter des erreurs de transport.
+3. `OddsIngestionService` et `EventReconciler` fonctionnent avec n'importe quel
+   `OddsProvider` sans modification — seul `provider.name` sert à scoper les alias.
 
 ## Développement backend
 

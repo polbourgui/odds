@@ -36,11 +36,16 @@ class ParticipantAlias(Base):
 
     __tablename__ = "participant_aliases"
     __table_args__ = (
-        UniqueConstraint("provider", "raw_name", name="uq_participant_alias_provider_raw"),
+        # Scoped by sport too: a short raw name (e.g. "Miami") from the same
+        # provider can refer to a different participant in a different sport.
+        UniqueConstraint(
+            "provider", "raw_name", "sport_id", name="uq_participant_alias_provider_raw_sport"
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     participant_id: Mapped[int] = mapped_column(ForeignKey("participants.id"), nullable=False)
+    sport_id: Mapped[int] = mapped_column(ForeignKey("sports.id"), nullable=False)
     provider: Mapped[str] = mapped_column(String(50), nullable=False)
     raw_name: Mapped[str] = mapped_column(String(150), nullable=False)
 
