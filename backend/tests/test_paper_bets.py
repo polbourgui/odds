@@ -95,7 +95,10 @@ class TestPlacePaperBet:
         db_session.flush()
         with pytest.raises(PaperBettingError):
             place_paper_bet(
-                db_session, selection_id=home_sel.id, bookmaker_slug="winamax_fr", settings=SETTINGS
+                db_session,
+                selection_id=home_sel.id,
+                bookmaker_slug="winamax_fr",
+                settings=Settings(_env_file=None, stale_odds_minutes=10),
             )
 
     def test_rejects_incomplete_sharp_coverage(self, db_session):

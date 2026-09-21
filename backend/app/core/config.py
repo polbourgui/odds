@@ -79,7 +79,15 @@ class Settings(BaseSettings):
         _csv_to_list
     )
 
-    odds_ingestion_interval_minutes: int = 5
+    # The Odds API bills "regions x markets" credits per /odds call, not a
+    # flat 1 credit per request — with 2 markets (h2h + totals) x 1 region
+    # (eu), that's 2 credits per tracked sport_key every cycle. On a 500
+    # credits/month plan with a dozen tracked sports, that rules out a
+    # short interval: 48h keeps a full cycle (~13 sport_keys, including
+    # dynamic tennis) to roughly 400 credits/month, leaving headroom for
+    # auto-settlement's /scores calls. Lower this if you track fewer
+    # sports or are on a larger plan.
+    odds_ingestion_interval_minutes: int = 2880
 
     # Bookmaker keys (as returned by the provider) used to flag ANJ-licensed
     # French books and the sharp reference line. Adjust to match the exact
@@ -95,7 +103,12 @@ class Settings(BaseSettings):
 
     _split_anj_bookmaker_keys = field_validator("anj_bookmaker_keys", mode="before")(_csv_to_list)
 
-    stale_odds_minutes: int = 10
+    # Must stay comfortably above odds_ingestion_interval_minutes: a value
+    # bet needs a snapshot captured within this window, so anything shorter
+    # than the actual refresh interval would make the value-bets table look
+    # empty for almost the entire gap between ingestion runs. 1 hour of
+    # slack over the default 48h interval, to absorb scheduler jitter.
+    stale_odds_minutes: int = 2940
 
     devig_method: str = "multiplicative"
     kelly_fraction: float = 0.25

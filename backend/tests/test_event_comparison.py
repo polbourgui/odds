@@ -87,7 +87,9 @@ class TestEventComparison:
         db_session.flush()
 
         result = get_event_comparison(
-            db_session, scenario["event"].id, settings=Settings(_env_file=None)
+            db_session,
+            scenario["event"].id,
+            settings=Settings(_env_file=None, stale_odds_minutes=10),
         )
         home_selection = _home_selection(result)
         by_slug = {q.bookmaker_slug: q for q in home_selection.quotes}

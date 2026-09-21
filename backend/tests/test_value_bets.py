@@ -233,7 +233,7 @@ class TestComputeValueBets:
         book = Bookmaker(slug="winamax_fr", name="Winamax", is_anj_licensed=True)
         db_session.add_all([pinnacle, book])
         db_session.flush()
-        # Sharp prices are all stale (40 min old, default threshold 10 min).
+        # Sharp prices are all stale (40 min old, 10 min threshold below).
         for sel, price in zip(sels, PINNACLE_ODDS, strict=True):
             db_session.add(
                 OddsSnapshot(
@@ -248,7 +248,9 @@ class TestComputeValueBets:
         )
         db_session.flush()
 
-        results = compute_value_bets(db_session, settings=Settings(_env_file=None))
+        results = compute_value_bets(
+            db_session, settings=Settings(_env_file=None, stale_odds_minutes=10)
+        )
         assert results == []
 
     def test_edge_min_filter(self, db_session):
