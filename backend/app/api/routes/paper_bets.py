@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
+from app.core.security import require_api_key
 from app.db.session import get_db
 from app.models.enums import BetStatus
 from app.schemas.paper_bets import (
@@ -24,7 +25,7 @@ from app.services.paper_bets import (
     update_bankroll,
 )
 
-router = APIRouter(prefix="/api", tags=["paper-bets"])
+router = APIRouter(prefix="/api", tags=["paper-bets"], dependencies=[Depends(require_api_key)])
 
 
 @router.get("/bankroll", response_model=BankrollOut)

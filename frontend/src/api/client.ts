@@ -12,6 +12,11 @@ import type {
 } from "../types";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
+const API_KEY = import.meta.env.VITE_API_KEY;
+
+function authHeaders(): HeadersInit {
+  return API_KEY ? { "X-API-Key": API_KEY } : {};
+}
 
 export class ApiError extends Error {
   status: number;
@@ -34,7 +39,7 @@ async function getJSON<T>(
       }
     }
   }
-  const response = await fetch(url.toString());
+  const response = await fetch(url.toString(), { headers: authHeaders() });
   if (!response.ok) {
     throw new Error(`Request to ${path} failed: HTTP ${response.status}`);
   }
@@ -45,7 +50,7 @@ async function sendJSON<T>(path: string, method: "POST" | "PATCH", body?: unknow
   const url = new URL(path, API_BASE_URL);
   const response = await fetch(url.toString(), {
     method,
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...authHeaders() },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   if (!response.ok) {
@@ -87,7 +92,7 @@ export function fetchBookmakers(): Promise<Bookmaker[]> {
 
 export async function fetchEventComparison(eventId: number): Promise<EventComparison | null> {
   const url = new URL(`/api/events/${eventId}/comparison`, API_BASE_URL);
-  const response = await fetch(url.toString());
+  const response = await fetch(url.toString(), { headers: authHeaders() });
   if (response.status === 404) {
     return null;
   }
@@ -139,6 +144,19 @@ export function fetchStats(): Promise<StatsSummary> {
   return getJSON<StatsSummary>("/api/stats");
 }
 
-export function exportPaperBetsCsvUrl(): string {
-  return new URL("/api/paper-bets/export.csv", API_BASE_URL).toString();
+export async function downloadPaperBetsCsv(): Promise<void> {
+  const url = new URL("/api/paper-bets/export.csv", API_BASE_URL);
+  const response = await fetch(url.toString(), { headers: authHeaders() });
+  if (!response.ok) {
+    throw new ApiError(`Export CSV échoué : HTTP ${response.status}`, response.status);
+  }
+  const blob = await response.blob();
+  const blobUrl = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = blobUrl;
+  link.download = "paper_bets.csv";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(blobUrl);
 }

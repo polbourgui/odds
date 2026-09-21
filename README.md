@@ -10,25 +10,72 @@ cotes à une référence sharp, calcul d'edge et de mise Kelly, suivi de paris f
 
 ## État du projet
 
-Livraison en cours par étapes (voir le brief). Étape actuelle : **5/6 —
-statistiques, réglages, export**.
+Livraison en cours par étapes (voir le brief). Étape actuelle : **6/6 —
+déploiement et durcissement**.
 
 - [x] 1. Schéma BDD, module de calcul et tests
 - [x] 2. Adaptateur de cotes fonctionnel et stockage des snapshots
 - [x] 3. API et tableau des value bets (+ comparateur par événement)
 - [x] 4. Paper betting et capture de clôture (+ règlement automatique)
 - [x] 5. Statistiques, réglages, export
-- [ ] 6. Déploiement (Vercel + Render), durcissement
+- [x] 6. Déploiement (Vercel + Render), durcissement
 
-## Déploiement (décision prise, mise en œuvre à l'étape 6)
+## Déploiement
 
-Pas de Docker : le frontend React/Vite est déployé sur **Vercel** (détection
-automatique, aucune config particulière). Le backend FastAPI a besoin d'un process
-persistant pour le scheduler de rafraîchissement des cotes (APScheduler) — ce que
-Vercel (serverless) ne permet pas nativement — donc il est déployé séparément sur
-**Render** (web service Python natif + PostgreSQL managé sur la même plateforme,
-déploiement par push Git, sans Dockerfile). Ce choix ne change rien au code déjà
-écrit (étapes 1-2) : SQLAlchemy/FastAPI/APScheduler restent agnostiques de l'hébergeur.
+Pas de Docker. Le frontend React/Vite est déployé sur **Vercel** (détection
+automatique). Le backend FastAPI a besoin d'un process persistant pour le
+scheduler (APScheduler : ingestion des cotes, capture de clôture, règlement
+automatique) — ce que Vercel (serverless) ne permet pas nativement — donc il
+est déployé séparément sur **Render** : un web service (l'API) et un
+background worker (le scheduler), avec un PostgreSQL managé sur la même
+plateforme. `render.yaml` (racine du repo) définit les trois en Blueprint ;
+`frontend/vercel.json` fait le lien côté Vercel (SPA rewrite pour le routeur
+côté client — sans ça, un rechargement sur `/stats` ou `/events/:id` renvoie
+une 404).
+
+### Backend + BDD sur Render
+
+1. Dashboard Render → **New** → **Blueprint**, pointer sur ce repo. Render
+   lit `render.yaml` et propose de créer `odds-db` (PostgreSQL managé),
+   `odds-api` (web service) et `odds-scheduler` (background worker).
+2. Renseigner les variables marquées `sync: false` dans le Blueprint, sur
+   **odds-api** et **odds-scheduler** :
+   - `ODDS_API_KEY` : clé du compte The Odds API (ou autre provider).
+   - `API_KEY` (odds-api uniquement) : secret partagé qui protège l'API une
+     fois publique — voir "Authentification" ci-dessous. En générer un avec
+     `python -c "import secrets; print(secrets.token_urlsafe(32))"`.
+   - `CORS_ALLOW_ORIGINS` (odds-api uniquement) : l'URL du déploiement
+     Vercel une fois connue (ex. `https://odds-xyz.vercel.app`), ajoutée
+     après le premier déploiement du frontend.
+3. `DATABASE_URL` est injecté automatiquement depuis `odds-db` — Render
+   fournit une URL `postgresql://...`, réécrite en interne vers le dialecte
+   `+psycopg` (voir `app/core/config.py`), donc rien à faire ici.
+4. Au déploiement, `odds-api` lance `alembic upgrade head` avant de démarrer
+   `uvicorn`, donc le schéma est toujours synchronisé avec le code déployé.
+   `odds-scheduler` lance `python -m app.scheduler`.
+
+### Frontend sur Vercel
+
+1. Dashboard Vercel → **Add New** → **Project**, importer ce repo. Vercel
+   détecte Vite automatiquement (root du projet : `frontend/`, à préciser
+   dans les réglages du projet si le repo entier est importé).
+2. Variables d'environnement :
+   - `VITE_API_BASE_URL` : l'URL du service `odds-api` sur Render (ex.
+     `https://odds-api-xyz.onrender.com`).
+   - `VITE_API_KEY` : la même valeur que `API_KEY` côté Render.
+3. Déployer, puis reporter l'URL Vercel obtenue dans `CORS_ALLOW_ORIGINS`
+   côté `odds-api` (étape précédente) et redéployer ce service.
+
+### Authentification
+
+Aucun compte utilisateur : l'outil est protégé par un secret partagé unique
+(`API_KEY` / `VITE_API_KEY`), envoyé sur chaque requête via l'en-tête
+`X-API-Key` (`app/core/security.py`, appliqué à toutes les routes sauf
+`/api/health` pour que le health check Render reste accessible). Vide en
+local (comportement par défaut, aucune configuration requise), il devient
+obligatoire dès que l'app est exposée publiquement — sans lui, n'importe qui
+trouvant l'URL pourrait modifier les réglages ou l'historique de paris
+fictifs.
 
 ## Structure
 
@@ -36,24 +83,26 @@ déploiement par push Git, sans Dockerfile). Ce choix ne change rien au code dé
 backend/
   app/
     api/routes/     # endpoints FastAPI (value-bets, sports, bookmakers, events, paper-bets)
-    core/           # configuration, module de calcul pur (devig, edge, Kelly, CLV)
+    core/           # configuration, sécurité (clé API), module de calcul pur (devig, edge, Kelly, CLV)
     db/             # base SQLAlchemy déclarative, session
     models/         # schéma de données (sports, événements, cotes, paper bets, ...)
     providers/      # interface OddsProvider + adaptateur The Odds API
     schemas/        # DTOs Pydantic exposés par l'API
     services/       # normalisation, rapprochement, ingestion, value bets, paper betting, capture de clôture
     main.py         # app FastAPI
-    scheduler.py    # process autonome (APScheduler) : capture de clôture périodique
+    scheduler.py    # process autonome (APScheduler) : ingestion, capture de clôture, règlement auto
   migrations/       # Alembic
   scripts/          # scripts dev (seed_dev_data.py)
   tests/            # pytest
 frontend/
+  vercel.json       # rewrite SPA pour le routeur côté client
   src/
     api/            # client HTTP vers l'API FastAPI
     components/      # ComplianceBanner, Nav, BankrollBadge, Filters, ValueBetsTable, PlaceBetButton, BankrollChart
     hooks/           # useValueBets (fetch + polling)
     pages/           # ValueBetsPage ("/"), EventComparisonPage ("/events/:id"), BetHistoryPage ("/bets"),
                      # SettingsPage ("/settings"), StatsPage ("/stats")
+render.yaml         # Blueprint Render : web service + scheduler + PostgreSQL managé
 ```
 
 ## Module de calcul (`app/core/calculations.py`)
@@ -147,12 +196,16 @@ Fonctions pures, sans dépendance DB/réseau :
   le coup d'envoi pour chaque sélection, le marque `is_closing`, le dévigue, et
   rétro-remplit `closing_odds`/`clv` sur les paris fictifs encore en attente de
   clôture. Idempotent, ignore les cotes capturées après le coup d'envoi.
-- `app/scheduler.py` : process autonome (APScheduler) avec deux jobs périodiques
-  (capture de clôture, règlement automatique), séparé du process web FastAPI exprès
-  — un scheduler démarré dans le lifespan FastAPI tournerait aussi pendant les tests
-  et taperait sur une vraie base non configurée. À lancer avec `python -m
+- `app/scheduler.py` : process autonome (APScheduler) avec trois jobs périodiques —
+  ingestion des cotes (`run_ingestion_for_tracked_sports`, un `sport_key` du provider
+  par entrée de `TRACKED_SPORT_KEYS`, une erreur sur l'un n'interrompt pas les
+  autres), capture de clôture, règlement automatique — séparé du process web FastAPI
+  exprès : un scheduler démarré dans le lifespan FastAPI tournerait aussi pendant les
+  tests et taperait sur une vraie base non configurée. À lancer avec `python -m
   app.scheduler` ; sur Render, c'est le process d'un **Background Worker**, distinct
-  du **Web Service** qui sert l'API.
+  du **Web Service** qui sert l'API — c'est aussi ce process qui tient à jour le
+  tableau des value bets en production (le web service ne fait qu'exposer/calculer à
+  partir des cotes déjà en base, il n'en récupère jamais lui-même).
 - `GET/PATCH /api/bankroll`, `POST /api/bankroll/reset`, `GET/POST /api/paper-bets`,
   `POST /api/paper-bets/{id}/settle`.
 - Frontend : bouton "Parier" sur chaque ligne du tableau des value bets, badge de
@@ -210,7 +263,8 @@ cd frontend
 cp .env.example .env.local
 npm run dev
 
-# Scheduler (autre terminal, optionnel en dev) : capture de clôture périodique
+# Scheduler (autre terminal, optionnel en dev) : ingestion des cotes, capture
+# de clôture et règlement automatique périodiques
 cd backend && python -m app.scheduler
 ```
 

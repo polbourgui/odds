@@ -20,6 +20,20 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql+psycopg://odds:odds@localhost:5432/odds"
 
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def _use_psycopg_dialect(cls, value: object) -> object:
+        # Managed Postgres providers (e.g. Render) hand out "postgres://" or
+        # plain "postgresql://" connection strings, but SQLAlchemy defaults
+        # those to the psycopg2 dialect, which isn't installed here (we use
+        # psycopg 3). Rewrite to the explicit "+psycopg" dialect instead of
+        # requiring every deployment target to know about this quirk.
+        if isinstance(value, str):
+            for prefix in ("postgres://", "postgresql://"):
+                if value.startswith(prefix):
+                    return "postgresql+psycopg://" + value[len(prefix) :]
+        return value
+
     odds_api_key: str = ""
     odds_api_base_url: str = "https://api.the-odds-api.com/v4"
     odds_api_regions: str = "eu"
@@ -27,6 +41,21 @@ class Settings(BaseSettings):
     # How many days back to look for finished events on the /scores endpoint
     # (The Odds API accepts 1-3).
     odds_api_scores_days_from: int = 3
+
+    # Provider sport_keys to poll periodically for fresh odds (see
+    # app/scheduler.py). Adjust to match the competitions you actually want
+    # to track.
+    tracked_sport_keys: Annotated[list[str], NoDecode] = [
+        "soccer_epl",
+        "soccer_france_ligue_one",
+        "soccer_uefa_champs_league",
+        "tennis_atp",
+        "basketball_nba",
+    ]
+
+    _split_tracked_sport_keys = field_validator("tracked_sport_keys", mode="before")(_csv_to_list)
+
+    odds_ingestion_interval_minutes: int = 5
 
     # Bookmaker keys (as returned by the provider) used to flag ANJ-licensed
     # French books and the sharp reference line. Adjust to match the exact
@@ -51,6 +80,11 @@ class Settings(BaseSettings):
 
     default_bankroll: float = 1000.0
     monthly_loss_limit: float | None = None
+
+    # Shared-secret key required (via the X-API-Key header) on every request
+    # once the app is exposed on the public internet. Empty disables the
+    # check, which is only appropriate for local development.
+    api_key: str = ""
 
     log_level: str = "INFO"
 

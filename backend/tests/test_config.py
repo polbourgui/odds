@@ -21,3 +21,23 @@ class TestAnjBookmakerKeys:
         monkeypatch.setenv("ANJ_BOOKMAKER_KEYS", " winamax_fr , betclic ")
         settings = Settings(_env_file=None)
         assert settings.anj_bookmaker_keys == ["winamax_fr", "betclic"]
+
+
+class TestDatabaseUrlNormalization:
+    def test_rewrites_postgres_scheme_to_psycopg_dialect(self):
+        settings = Settings(
+            _env_file=None, database_url="postgres://u:p@host:5432/db"
+        )
+        assert settings.database_url == "postgresql+psycopg://u:p@host:5432/db"
+
+    def test_rewrites_plain_postgresql_scheme_to_psycopg_dialect(self):
+        settings = Settings(
+            _env_file=None, database_url="postgresql://u:p@host:5432/db"
+        )
+        assert settings.database_url == "postgresql+psycopg://u:p@host:5432/db"
+
+    def test_leaves_an_already_explicit_dialect_untouched(self):
+        settings = Settings(
+            _env_file=None, database_url="postgresql+psycopg://u:p@host:5432/db"
+        )
+        assert settings.database_url == "postgresql+psycopg://u:p@host:5432/db"

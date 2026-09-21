@@ -99,3 +99,22 @@ class OddsIngestionService:
         return IngestionResult(
             events_seen=len(event_odds_list), snapshots_created=snapshots_created
         )
+
+
+def run_ingestion_for_tracked_sports(
+    db: Session, provider: OddsProvider, settings: Settings | None = None
+) -> list[IngestionResult]:
+    """Ingest fresh odds for every sport_key in settings.tracked_sport_keys.
+
+    Used by the periodic scheduler job. A provider error on one sport_key
+    (already logged by ingest_sport) doesn't stop the others from running.
+    """
+    settings = settings or get_settings()
+    service = OddsIngestionService(db, provider, settings=settings)
+    results = []
+    for sport_key in settings.tracked_sport_keys:
+        try:
+            results.append(service.ingest_sport(sport_key))
+        except ProviderError:
+            continue
+    return results

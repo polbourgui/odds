@@ -2,12 +2,13 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.security import require_api_key
 from app.db.session import get_db
 from app.models.bookmakers import Bookmaker
 from app.models.sports import Sport
 from app.schemas.meta import BookmakerOut, SportOut
 
-router = APIRouter(prefix="/api", tags=["meta"])
+router = APIRouter(prefix="/api", tags=["meta"], dependencies=[Depends(require_api_key)])
 
 
 @router.get("/sports", response_model=list[SportOut])

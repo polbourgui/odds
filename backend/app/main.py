@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -5,6 +7,7 @@ from app.api.routes import app_settings, events, meta, paper_bets, stats, value_
 from app.core.config import get_settings
 
 settings = get_settings()
+logging.basicConfig(level=settings.log_level)
 
 app = FastAPI(title="Odds", version="0.1.0")
 

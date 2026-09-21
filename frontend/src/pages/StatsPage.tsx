@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { BankrollChart } from "../components/BankrollChart";
-import { exportPaperBetsCsvUrl, fetchStats } from "../api/client";
+import { downloadPaperBetsCsv, fetchStats } from "../api/client";
 import { formatPct, formatSignedPct, formatStake } from "../format";
 import type { GroupStat, StatsSummary } from "../types";
 import styles from "./StatsPage.module.css";
@@ -82,9 +82,17 @@ export function StatsPage() {
     <>
       <header className={styles.header}>
         <span className={styles.title}>Statistiques</span>
-        <a className={styles.exportLink} href={exportPaperBetsCsvUrl()}>
+        <button
+          type="button"
+          className={styles.exportLink}
+          onClick={() => {
+            downloadPaperBetsCsv().catch(() => {
+              // Best-effort export; a failed download isn't worth a modal.
+            });
+          }}
+        >
           Exporter en CSV
-        </a>
+        </button>
       </header>
 
       {stats.monthly_loss_limit_reached && (

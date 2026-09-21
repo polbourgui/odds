@@ -1,3 +1,4 @@
+from app.core.config import Settings
 from app.models.bookmakers import Bookmaker
 from app.models.enums import MarketType, SelectionCode
 from app.models.events import Event
@@ -11,7 +12,8 @@ from app.providers.base import (
     ProviderMarket,
     ProviderOutcome,
 )
-from app.services.odds_ingestion import OddsIngestionService
+from app.providers.exceptions import ProviderError
+from app.services.odds_ingestion import OddsIngestionService, run_ingestion_for_tracked_sports
 
 EVENT = ProviderEvent(
     provider_event_id="evt-1",
@@ -108,3 +110,57 @@ class TestOddsIngestion:
 
         prices = sorted(float(s.odds) for s in db_session.query(OddsSnapshot).all())
         assert prices == sorted([2.10, 3.40, 3.60, 2.10, 3.40, 3.60])
+
+
+class MultiSportFakeProvider(OddsProvider):
+    """A fake OddsProvider whose fetch_odds is keyed by sport_key, so a
+    single instance can back tests exercising several tracked sports."""
+
+    name = "multi_sport_fake_provider"
+
+    def __init__(self, by_sport_key: dict[str, list[ProviderEventOdds] | Exception]):
+        self._by_sport_key = by_sport_key
+
+    def fetch_events(self, sport_key: str) -> list[ProviderEvent]:
+        raise NotImplementedError
+
+    def fetch_odds(self, sport_key: str, market_types=None) -> list[ProviderEventOdds]:
+        outcome = self._by_sport_key.get(sport_key, [])
+        if isinstance(outcome, Exception):
+            raise outcome
+        return outcome
+
+
+class TestRunIngestionForTrackedSports:
+    def test_ingests_every_tracked_sport_key(self, db_session):
+        provider = MultiSportFakeProvider(
+            {
+                "soccer_epl": [make_event_odds()],
+                "tennis_atp": [make_event_odds()],
+            }
+        )
+        settings = Settings(
+            _env_file=None, tracked_sport_keys=["soccer_epl", "tennis_atp"]
+        )
+
+        results = run_ingestion_for_tracked_sports(db_session, provider, settings=settings)
+
+        assert [r.events_seen for r in results] == [1, 1]
+        assert db_session.query(OddsSnapshot).count() == 12  # 6 per sport_key
+
+    def test_provider_error_on_one_sport_key_does_not_abort_the_others(self, db_session):
+        provider = MultiSportFakeProvider(
+            {
+                "soccer_epl": ProviderError("boom"),
+                "tennis_atp": [make_event_odds()],
+            }
+        )
+        settings = Settings(
+            _env_file=None, tracked_sport_keys=["soccer_epl", "tennis_atp"]
+        )
+
+        results = run_ingestion_for_tracked_sports(db_session, provider, settings=settings)
+
+        assert len(results) == 1
+        assert results[0].events_seen == 1
+        assert db_session.query(OddsSnapshot).count() == 6

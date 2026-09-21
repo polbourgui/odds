@@ -1,13 +1,14 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
+from app.core.security import require_api_key
 from app.db.session import get_db
 from app.models.enums import MarketType
 from app.schemas.value_bets import ValueBetOut
 from app.services.app_settings import get_effective_settings
 from app.services.value_bets import compute_value_bets
 
-router = APIRouter(prefix="/api", tags=["value-bets"])
+router = APIRouter(prefix="/api", tags=["value-bets"], dependencies=[Depends(require_api_key)])
 
 
 @router.get("/value-bets", response_model=list[ValueBetOut])

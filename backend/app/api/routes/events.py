@@ -1,12 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.core.security import require_api_key
 from app.db.session import get_db
 from app.schemas.event_comparison import EventComparisonOut
 from app.services.app_settings import get_effective_settings
 from app.services.event_comparison import get_event_comparison
 
-router = APIRouter(prefix="/api", tags=["events"])
+router = APIRouter(prefix="/api", tags=["events"], dependencies=[Depends(require_api_key)])
 
 
 @router.get("/events/{event_id}/comparison", response_model=EventComparisonOut)

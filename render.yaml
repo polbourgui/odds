@@ -1,0 +1,71 @@
+# Render Blueprint: backend web service + background worker + managed
+# Postgres, all defined as code (https://render.com/docs/blueprint-spec).
+# Import this file from the Render dashboard ("New" -> "Blueprint",
+# pointing at this repo) to create all three resources in one go.
+#
+# The frontend is NOT defined here — it's deployed separately on Vercel
+# (see README.md), since Vercel auto-detects the Vite app in frontend/.
+#
+# Plans below are a starting point, not a guarantee of current Render
+# pricing/availability — check the Render dashboard and adjust freely.
+# Background workers in particular have historically required a paid plan
+# (no free tier), unlike web services.
+
+databases:
+  - name: odds-db
+    databaseName: odds
+    user: odds
+    plan: free
+    postgresMajorVersion: "16"
+
+services:
+  # Serves the FastAPI app. Applies pending Alembic migrations before
+  # starting every time it deploys, so the schema is always in sync with
+  # whatever migration files are on the deployed commit.
+  - type: web
+    name: odds-api
+    env: python
+    rootDir: backend
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.7"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: odds-db
+          property: connectionString
+      - key: LOG_LEVEL
+        value: INFO
+      # Set manually in the Render dashboard (not stored in the repo):
+      - key: ODDS_API_KEY
+        sync: false
+      - key: API_KEY
+        sync: false
+      - key: CORS_ALLOW_ORIGINS
+        sync: false
+
+  # Runs the periodic jobs (odds ingestion, closing-line capture, automatic
+  # settlement) — see app/scheduler.py. Deliberately a separate process from
+  # the web service: a serverless/request-driven host couldn't keep this
+  # running, which is the reason the backend isn't on Vercel too.
+  - type: worker
+    name: odds-scheduler
+    env: python
+    rootDir: backend
+    plan: starter
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m app.scheduler
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.7"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: odds-db
+          property: connectionString
+      - key: LOG_LEVEL
+        value: INFO
+      - key: ODDS_API_KEY
+        sync: false

@@ -14,3 +14,4 @@ select = ["E", "F", "I", "UP", "B"]
 # FastAPI's Depends()/Query() as argument defaults is the idiomatic pattern
 # the framework is built around, not the mutable-default footgun B008 flags.
 "app/api/**/*.py" = ["B008"]
+"app/core/security.py" = ["B008"]

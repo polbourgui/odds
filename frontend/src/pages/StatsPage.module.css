@@ -12,12 +12,15 @@
 }
 
 .exportLink {
+  font: inherit;
   font-size: 12px;
   color: var(--accent);
   text-decoration: none;
+  background: transparent;
   border: 1px solid var(--border);
   border-radius: 4px;
   padding: 6px 12px;
+  cursor: pointer;
 }
 
 .exportLink:hover {
