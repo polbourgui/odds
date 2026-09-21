@@ -19,6 +19,8 @@ from app.providers.base import (
     ProviderEventOdds,
     ProviderMarket,
     ProviderOutcome,
+    ProviderResult,
+    ResultsProvider,
 )
 from app.providers.exceptions import (
     ProviderAuthError,
@@ -106,6 +108,29 @@ def _parse_market(raw_market: dict, home_name: str, away_name: str) -> ProviderM
     return None
 
 
+def _parse_result(raw: dict) -> ProviderResult:
+    completed = bool(raw.get("completed"))
+    home_score: float | None = None
+    away_score: float | None = None
+
+    if completed and raw.get("scores"):
+        by_name = {s["name"]: s.get("score") for s in raw["scores"]}
+        home_raw = by_name.get(raw.get("home_team"))
+        away_raw = by_name.get(raw.get("away_team"))
+        try:
+            home_score = float(home_raw) if home_raw is not None else None
+            away_score = float(away_raw) if away_raw is not None else None
+        except (TypeError, ValueError):
+            logger.warning("Could not parse scores for event id=%r", raw.get("id"))
+
+    return ProviderResult(
+        provider_event_id=raw["id"],
+        completed=completed,
+        home_score=home_score,
+        away_score=away_score,
+    )
+
+
 def _parse_event_odds(raw: dict, sport_key: str) -> ProviderEventOdds:
     event = _parse_event(raw, sport_key)
     bookmakers = []
@@ -129,7 +154,7 @@ def _parse_event_odds(raw: dict, sport_key: str) -> ProviderEventOdds:
     return ProviderEventOdds(event=event, bookmakers=bookmakers)
 
 
-class TheOddsApiProvider(OddsProvider):
+class TheOddsApiProvider(OddsProvider, ResultsProvider):
     name = "the_odds_api"
 
     def __init__(self, settings: Settings | None = None, client: httpx.Client | None = None):
@@ -204,6 +229,15 @@ class TheOddsApiProvider(OddsProvider):
                 for bm in event_odds.bookmakers:
                     bm.markets = [m for m in bm.markets if m.market_type in wanted]
         return results
+
+    def fetch_results(
+        self, sport_key: str, event_ids: list[str] | None = None
+    ) -> list[ProviderResult]:
+        params = {"daysFrom": self._settings.odds_api_scores_days_from}
+        if event_ids:
+            params["eventIds"] = ",".join(event_ids)
+        raw_results = self._get(f"/sports/{sport_key}/scores", params=params)
+        return [_parse_result(raw) for raw in raw_results]
 
     def close(self) -> None:
         self._client.close()

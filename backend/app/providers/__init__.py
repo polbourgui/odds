@@ -5,6 +5,8 @@ from app.providers.base import (
     ProviderEventOdds,
     ProviderMarket,
     ProviderOutcome,
+    ProviderResult,
+    ResultsProvider,
 )
 from app.providers.exceptions import (
     ProviderAuthError,
@@ -20,6 +22,8 @@ __all__ = [
     "ProviderMarket",
     "ProviderBookmakerQuote",
     "ProviderEventOdds",
+    "ProviderResult",
+    "ResultsProvider",
     "ProviderError",
     "ProviderAuthError",
     "ProviderQuotaExceededError",

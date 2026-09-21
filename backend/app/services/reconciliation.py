@@ -49,7 +49,9 @@ class EventReconciler:
 
     # -- Competition -------------------------------------------------------
 
-    def resolve_competition(self, sport: Sport, raw_name: str) -> Competition:
+    def resolve_competition(
+        self, sport: Sport, raw_name: str, *, provider_sport_key: str | None = None
+    ) -> Competition:
         alias = self.db.scalar(
             select(CompetitionAlias).where(
                 CompetitionAlias.provider == self.provider_name,
@@ -57,7 +59,10 @@ class EventReconciler:
             )
         )
         if alias is not None:
-            return alias.competition
+            competition = alias.competition
+            if provider_sport_key is not None and competition.provider_sport_key is None:
+                competition.provider_sport_key = provider_sport_key
+            return competition
 
         normalized = normalize_name(raw_name)
         candidates = list(
@@ -67,6 +72,8 @@ class EventReconciler:
         for candidate in candidates:
             if normalize_name(candidate.name) == normalized:
                 self._add_competition_alias(candidate, raw_name)
+                if provider_sport_key is not None and candidate.provider_sport_key is None:
+                    candidate.provider_sport_key = provider_sport_key
                 return candidate
 
         best, best_score = self._best_fuzzy_match(
@@ -74,12 +81,15 @@ class EventReconciler:
         )
         if best is not None and best_score >= self.fuzzy_threshold:
             self._add_competition_alias(best, raw_name)
+            if provider_sport_key is not None and best.provider_sport_key is None:
+                best.provider_sport_key = provider_sport_key
             return best
 
         competition = Competition(
             sport_id=sport.id,
             slug=self._unique_competition_slug(normalized or raw_name),
             name=raw_name,
+            provider_sport_key=provider_sport_key,
         )
         self.db.add(competition)
         self.db.flush()
@@ -167,7 +177,9 @@ class EventReconciler:
 
     def resolve_event(self, provider_event: ProviderEvent) -> Event:
         sport = self.resolve_sport(provider_event.sport_key)
-        competition = self.resolve_competition(sport, provider_event.competition_name)
+        competition = self.resolve_competition(
+            sport, provider_event.competition_name, provider_sport_key=provider_event.sport_key
+        )
         home = self.resolve_participant(sport, provider_event.home_name)
         away = self.resolve_participant(sport, provider_event.away_name)
 

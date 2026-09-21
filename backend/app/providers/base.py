@@ -52,6 +52,18 @@ class ProviderEventOdds(BaseModel):
     bookmakers: list[ProviderBookmakerQuote]
 
 
+class ProviderResult(BaseModel):
+    """The outcome of a finished (or in-progress) event, for automatic
+    settlement. Scores are in whatever unit the sport uses (goals, points,
+    sets, ...) -- comparing home_score to away_score is enough to determine
+    a 1X2/moneyline winner or an over/under total across sports."""
+
+    provider_event_id: str
+    completed: bool
+    home_score: float | None = None
+    away_score: float | None = None
+
+
 class OddsProvider(ABC):
     """Adapter contract. Implementations must raise the typed errors in
     `app.providers.exceptions` rather than leaking transport-level ones."""
@@ -67,3 +79,18 @@ class OddsProvider(ABC):
         self, sport_key: str, market_types: list[MarketType] | None = None
     ) -> list[ProviderEventOdds]:
         """Fetch current odds for a sport, across bookmakers and markets."""
+
+
+class ResultsProvider(ABC):
+    """Separate, optional contract for automatic settlement: a source of
+    match results. Not every OddsProvider implementation needs to support
+    this -- V1 only has one that does (The Odds API's /scores endpoint)."""
+
+    name: str
+
+    @abstractmethod
+    def fetch_results(
+        self, sport_key: str, event_ids: list[str] | None = None
+    ) -> list[ProviderResult]:
+        """Fetch recent results for a sport, optionally limited to specific
+        provider event ids."""

@@ -193,3 +193,64 @@ class TestErrorHandling:
 
         with pytest.raises(ProviderTimeoutError):
             _provider(handler).fetch_events("soccer_epl")
+
+
+SCORES_RESPONSE = [
+    {
+        "id": "evt-1",
+        "sport_key": "soccer_epl",
+        "sport_title": "EPL",
+        "commence_time": "2026-03-01T20:00:00Z",
+        "completed": True,
+        "home_team": "Arsenal",
+        "away_team": "Chelsea",
+        "scores": [
+            {"name": "Arsenal", "score": "2"},
+            {"name": "Chelsea", "score": "1"},
+        ],
+        "last_update": "2026-03-01T22:00:00Z",
+    },
+    {
+        "id": "evt-2",
+        "sport_key": "soccer_epl",
+        "sport_title": "EPL",
+        "commence_time": "2026-03-02T20:00:00Z",
+        "completed": False,
+        "home_team": "Liverpool",
+        "away_team": "Man City",
+        "scores": None,
+        "last_update": None,
+    },
+]
+
+
+class TestFetchResults:
+    def test_parses_completed_result_with_scores(self):
+        def handler(request: httpx.Request) -> httpx.Response:
+            assert request.url.path == "/sports/soccer_epl/scores"
+            return httpx.Response(200, json=SCORES_RESPONSE)
+
+        results = _provider(handler).fetch_results("soccer_epl")
+
+        completed = next(r for r in results if r.provider_event_id == "evt-1")
+        assert completed.completed is True
+        assert completed.home_score == 2.0
+        assert completed.away_score == 1.0
+
+    def test_incomplete_event_has_no_scores(self):
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, json=SCORES_RESPONSE)
+
+        results = _provider(handler).fetch_results("soccer_epl")
+
+        pending = next(r for r in results if r.provider_event_id == "evt-2")
+        assert pending.completed is False
+        assert pending.home_score is None
+        assert pending.away_score is None
+
+    def test_event_ids_filter_is_passed_as_comma_separated_param(self):
+        def handler(request: httpx.Request) -> httpx.Response:
+            assert request.url.params["eventIds"] == "evt-1,evt-2"
+            return httpx.Response(200, json=SCORES_RESPONSE)
+
+        _provider(handler).fetch_results("soccer_epl", event_ids=["evt-1", "evt-2"])

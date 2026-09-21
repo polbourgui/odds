@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     odds_api_base_url: str = "https://api.the-odds-api.com/v4"
     odds_api_regions: str = "eu"
     odds_api_timeout_seconds: float = 10.0
+    # How many days back to look for finished events on the /scores endpoint
+    # (The Odds API accepts 1-3).
+    odds_api_scores_days_from: int = 3
 
     # Bookmaker keys (as returned by the provider) used to flag ANJ-licensed
     # French books and the sharp reference line. Adjust to match the exact
@@ -51,9 +54,10 @@ class Settings(BaseSettings):
 
     log_level: str = "INFO"
 
-    # How often the standalone scheduler process (app/scheduler.py) runs the
-    # closing-line capture job.
+    # How often the standalone scheduler process (app/scheduler.py) runs its
+    # jobs.
     closing_capture_interval_minutes: int = 5
+    auto_settlement_interval_minutes: int = 15
 
     # Frontend origins allowed to call the API (Vite dev server + the Vercel
     # deployment). Comma-separated in .env, e.g. "https://odds.vercel.app".

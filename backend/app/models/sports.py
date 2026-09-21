@@ -26,6 +26,11 @@ class Competition(Base):
     name: Mapped[str] = mapped_column(String(150), nullable=False)
     country: Mapped[str | None] = mapped_column(String(100))
 
+    # The provider's own sport_key (e.g. "soccer_epl"), needed to query a
+    # results feed for automatic settlement -- more specific than Sport.slug,
+    # which is only the general category ("soccer").
+    provider_sport_key: Mapped[str | None] = mapped_column(String(100))
+
     sport: Mapped[Sport] = relationship(back_populates="competitions")
 
     def __repr__(self) -> str:
