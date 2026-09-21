@@ -19,6 +19,18 @@ export function Nav() {
         >
           Mes paris
         </NavLink>
+        <NavLink
+          to="/stats"
+          className={({ isActive }) => `${styles.link} ${isActive ? styles.activeLink : ""}`}
+        >
+          Statistiques
+        </NavLink>
+        <NavLink
+          to="/settings"
+          className={({ isActive }) => `${styles.link} ${isActive ? styles.activeLink : ""}`}
+        >
+          Réglages
+        </NavLink>
       </div>
       <div className={styles.spacer} />
       <BankrollBadge />

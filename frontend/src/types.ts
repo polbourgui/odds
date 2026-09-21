@@ -125,3 +125,72 @@ export interface PaperBet {
   settled_at: string | null;
   payout: number | null;
 }
+
+export type DevigMethod = "multiplicative" | "power" | "shin";
+
+export interface AppSettings {
+  devig_method: DevigMethod;
+  kelly_fraction: number;
+  kelly_cap_pct: number;
+  edge_threshold: number;
+  stale_odds_minutes: number;
+  default_bankroll: number;
+  monthly_loss_limit: number | null;
+}
+
+export interface AppSettingsUpdate {
+  devig_method?: DevigMethod;
+  kelly_fraction?: number;
+  kelly_cap_pct?: number;
+  edge_threshold?: number;
+  stale_odds_minutes?: number;
+  default_bankroll?: number;
+  monthly_loss_limit?: number | null;
+}
+
+export interface BankrollPoint {
+  at: string;
+  balance: number;
+  label: string;
+}
+
+export interface GroupStat {
+  key: string;
+  label: string;
+  bets: number;
+  profit: number;
+  turnover: number;
+  roi: number | null;
+}
+
+export interface StatsSummary {
+  total_bets: number;
+  pending_bets: number;
+  graded_bets: number;
+  wins: number;
+  losses: number;
+  pushes: number;
+  voids: number;
+
+  win_rate: number | null;
+  win_rate_ci: [number, number] | null;
+
+  turnover: number;
+  profit: number;
+  roi: number | null;
+  roi_ci: [number, number] | null;
+
+  average_clv: number | null;
+  average_clv_ci: [number, number] | null;
+  clv_sample_size: number;
+
+  max_drawdown_pct: number | null;
+  bankroll_curve: BankrollPoint[];
+  by_bookmaker: GroupStat[];
+  by_sport: GroupStat[];
+  by_market: GroupStat[];
+
+  monthly_profit: number;
+  monthly_loss_limit: number | null;
+  monthly_loss_limit_reached: boolean;
+}

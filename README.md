@@ -10,14 +10,14 @@ cotes à une référence sharp, calcul d'edge et de mise Kelly, suivi de paris f
 
 ## État du projet
 
-Livraison en cours par étapes (voir le brief). Étape actuelle : **4/6 — paper
-betting et capture de clôture**.
+Livraison en cours par étapes (voir le brief). Étape actuelle : **5/6 —
+statistiques, réglages, export**.
 
 - [x] 1. Schéma BDD, module de calcul et tests
 - [x] 2. Adaptateur de cotes fonctionnel et stockage des snapshots
 - [x] 3. API et tableau des value bets (+ comparateur par événement)
-- [x] 4. Paper betting et capture de clôture
-- [ ] 5. Statistiques, réglages, export
+- [x] 4. Paper betting et capture de clôture (+ règlement automatique)
+- [x] 5. Statistiques, réglages, export
 - [ ] 6. Déploiement (Vercel + Render), durcissement
 
 ## Déploiement (décision prise, mise en œuvre à l'étape 6)
@@ -50,9 +50,10 @@ backend/
 frontend/
   src/
     api/            # client HTTP vers l'API FastAPI
-    components/      # ComplianceBanner, Nav, BankrollBadge, Filters, ValueBetsTable, PlaceBetButton
+    components/      # ComplianceBanner, Nav, BankrollBadge, Filters, ValueBetsTable, PlaceBetButton, BankrollChart
     hooks/           # useValueBets (fetch + polling)
-    pages/           # ValueBetsPage ("/"), EventComparisonPage ("/events/:id"), BetHistoryPage ("/bets")
+    pages/           # ValueBetsPage ("/"), EventComparisonPage ("/events/:id"), BetHistoryPage ("/bets"),
+                     # SettingsPage ("/settings"), StatsPage ("/stats")
 ```
 
 ## Module de calcul (`app/core/calculations.py`)
@@ -157,6 +158,41 @@ Fonctions pures, sans dépendance DB/réseau :
 - Frontend : bouton "Parier" sur chaque ligne du tableau des value bets, badge de
   bankroll dans la nav, page "Mes paris" (historique, règlement manuel, réglages de
   la bankroll de départ).
+
+## Statistiques, réglages, export (`app/core/statistics.py`, `app/services/app_settings.py`, `app/services/stats.py`)
+
+- `app/core/statistics.py` : module pur (sans I/O), testé indépendamment —
+  `mean`/`stdev`, `confidence_interval_mean` (approximation normale, z-scores à
+  90/95/99%), `wilson_score_interval` (intervalle de confiance pour une proportion
+  binomiale, plus fiable que l'approximation normale sur petit échantillon comme un
+  taux de réussite), `max_drawdown`. Toute statistique affichée est systématiquement
+  accompagnée de son intervalle de confiance et de la taille d'échantillon `n`, pour
+  éviter les conclusions hâtives sur peu de paris (exigence explicite du brief).
+- `get_effective_settings` (`app/services/app_settings.py`) : les réglages (méthode
+  de dévigage, fraction de Kelly, plafond de mise, seuil d'edge, fraîcheur des cotes,
+  bankroll de référence, plafond de perte mensuel) sont stockés en base
+  (`AppSettings`, ligne singleton) et fusionnés par-dessus les valeurs d'environnement
+  via `Settings.model_copy(update=...)`. Modifiables depuis la page Réglages, ils
+  s'appliquent immédiatement à tous les calculs (value bets, mise Kelly des paris
+  fictifs) sans redémarrage. `GET/PATCH /api/settings`.
+- `compute_stats` (`app/services/stats.py`) : nombre de paris (total/en attente/
+  gradés), taux de réussite (+ IC Wilson), turnover, profit, ROI/yield (+ IC),
+  CLV moyen (+ IC), drawdown max (rejoué sur la courbe d'équité de la bankroll à
+  partir du solde initial), ventilation par book/sport/marché, et suivi du plafond
+  de perte mensuel virtuel (calculé sur le mois calendaire en cours, jamais un
+  blocage — juste une alerte informative, conforme à l'esprit "outil d'analyse").
+  `GET /api/stats`.
+- `export_paper_bets_csv` (`app/services/paper_bets.py`) : export CSV complet de
+  l'historique des paris fictifs (une ligne par pari, du plus ancien au plus
+  récent). `GET /api/paper-bets/export.csv`.
+- Frontend : `StatsPage` (tuiles KPI avec libellé d'IC en clair, ex. "IC95 [9.5%,
+  90.5%] · n=2", bannière d'alerte si le plafond de perte mensuel est atteint,
+  `BankrollChart` — courbe d'équité en aire, Recharts, échelle Y calée sur la plage
+  réelle des données plutôt qu'une échelle fixe — et tables de ventilation denses
+  plutôt que des graphiques à barres, plus cohérent avec le reste de l'interface),
+  `SettingsPage` (formulaire avec confirmation d'enregistrement, plafond de perte
+  mensuel activable, bankroll de référence des value bets explicitement distinguée
+  de la bankroll de départ du paper betting).
 
 ## Lancer le projet en local
 

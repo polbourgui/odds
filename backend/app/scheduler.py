@@ -19,6 +19,7 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 from app.core.config import get_settings
 from app.db.session import SessionLocal
 from app.providers.the_odds_api import TheOddsApiProvider
+from app.services.app_settings import get_effective_settings
 from app.services.auto_settlement import run_auto_settlement
 from app.services.closing_capture import run_closing_capture
 
@@ -28,7 +29,7 @@ logger = logging.getLogger(__name__)
 def closing_capture_job() -> None:
     db = SessionLocal()
     try:
-        run_closing_capture(db)
+        run_closing_capture(db, settings=get_effective_settings(db))
     except Exception:
         logger.exception("Closing-line capture job failed")
     finally:

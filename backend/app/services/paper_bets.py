@@ -4,6 +4,8 @@ what the value bets table showed. No real money or bookmaker account is
 ever involved.
 """
 
+import csv
+import io
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
@@ -301,3 +303,67 @@ def list_paper_bets(db: Session, *, status: BetStatus | None = None) -> list[Pap
         stmt = stmt.where(PaperBet.status == status)
     bets = db.scalars(stmt).all()
     return [to_paper_bet_view(bet) for bet in bets]
+
+
+_CSV_COLUMNS = [
+    "id",
+    "placed_at",
+    "sport",
+    "competition",
+    "home",
+    "away",
+    "event_start_time",
+    "market_type",
+    "line",
+    "selection",
+    "participant",
+    "bookmaker",
+    "odds_taken",
+    "stake",
+    "true_probability",
+    "fair_odds",
+    "edge",
+    "status",
+    "settled_at",
+    "payout",
+    "closing_odds",
+    "clv",
+]
+
+
+def _csv_row(view: PaperBetView) -> list[str]:
+    return [
+        str(view.id),
+        view.placed_at.isoformat(),
+        view.sport_slug,
+        view.competition_name,
+        view.home_name,
+        view.away_name,
+        view.event_start_time.isoformat(),
+        view.market_type.value,
+        "" if view.line is None else str(view.line),
+        view.selection_code.value,
+        view.participant_name or "",
+        view.bookmaker_name,
+        str(view.odds_taken),
+        str(view.stake),
+        str(view.true_probability_at_placement),
+        str(view.fair_odds_at_placement),
+        str(view.edge_at_placement),
+        view.status.value,
+        "" if view.settled_at is None else view.settled_at.isoformat(),
+        "" if view.payout is None else str(view.payout),
+        "" if view.closing_odds is None else str(view.closing_odds),
+        "" if view.clv is None else str(view.clv),
+    ]
+
+
+def export_paper_bets_csv(db: Session) -> str:
+    """The full paper bet history as CSV text, oldest first."""
+    views = list(reversed(list_paper_bets(db)))
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(_CSV_COLUMNS)
+    for view in views:
+        writer.writerow(_csv_row(view))
+    return buffer.getvalue()

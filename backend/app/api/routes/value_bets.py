@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.enums import MarketType
 from app.schemas.value_bets import ValueBetOut
+from app.services.app_settings import get_effective_settings
 from app.services.value_bets import compute_value_bets
 
 router = APIRouter(prefix="/api", tags=["value-bets"])
@@ -19,6 +20,7 @@ def list_value_bets(
 ) -> list[ValueBetOut]:
     value_bets = compute_value_bets(
         db,
+        settings=get_effective_settings(db),
         sport_slug=sport,
         market_type=market,
         bookmaker_slug=bookmaker,

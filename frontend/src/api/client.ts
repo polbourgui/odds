@@ -1,4 +1,15 @@
-import type { Bankroll, BetStatus, Bookmaker, EventComparison, PaperBet, Sport, ValueBet } from "../types";
+import type {
+  AppSettings,
+  AppSettingsUpdate,
+  Bankroll,
+  BetStatus,
+  Bookmaker,
+  EventComparison,
+  PaperBet,
+  Sport,
+  StatsSummary,
+  ValueBet,
+} from "../types";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 
@@ -114,4 +125,20 @@ export function placePaperBet(selectionId: number, bookmakerSlug: string): Promi
 
 export function settlePaperBet(betId: number, status: BetStatus): Promise<PaperBet> {
   return sendJSON<PaperBet>(`/api/paper-bets/${betId}/settle`, "POST", { status });
+}
+
+export function fetchAppSettings(): Promise<AppSettings> {
+  return getJSON<AppSettings>("/api/settings");
+}
+
+export function updateAppSettings(payload: AppSettingsUpdate): Promise<AppSettings> {
+  return sendJSON<AppSettings>("/api/settings", "PATCH", payload);
+}
+
+export function fetchStats(): Promise<StatsSummary> {
+  return getJSON<StatsSummary>("/api/stats");
+}
+
+export function exportPaperBetsCsvUrl(): string {
+  return new URL("/api/paper-bets/export.csv", API_BASE_URL).toString();
 }

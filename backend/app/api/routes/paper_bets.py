@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -10,8 +11,10 @@ from app.schemas.paper_bets import (
     PlaceBetIn,
     SettleBetIn,
 )
+from app.services.app_settings import get_effective_settings
 from app.services.paper_bets import (
     PaperBettingError,
+    export_paper_bets_csv,
     get_or_create_default_bankroll,
     list_paper_bets,
     place_paper_bet,
@@ -60,11 +63,24 @@ def get_paper_bets(
     return [PaperBetOut.model_validate(v) for v in views]
 
 
+@router.get("/paper-bets/export.csv")
+def export_paper_bets(db: Session = Depends(get_db)) -> Response:
+    csv_text = export_paper_bets_csv(db)
+    return Response(
+        content=csv_text,
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=paper_bets.csv"},
+    )
+
+
 @router.post("/paper-bets", response_model=PaperBetOut, status_code=201)
 def post_paper_bet(payload: PlaceBetIn, db: Session = Depends(get_db)) -> PaperBetOut:
     try:
         bet = place_paper_bet(
-            db, selection_id=payload.selection_id, bookmaker_slug=payload.bookmaker_slug
+            db,
+            selection_id=payload.selection_id,
+            bookmaker_slug=payload.bookmaker_slug,
+            settings=get_effective_settings(db),
         )
     except PaperBettingError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
