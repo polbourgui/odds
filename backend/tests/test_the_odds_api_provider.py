@@ -171,6 +171,47 @@ class TestFetchOdds:
         assert market_types == {MarketType.ONE_X_TWO}
 
 
+SPORTS_RESPONSE = [
+    {
+        "key": "soccer_epl",
+        "group": "Soccer",
+        "title": "EPL",
+        "active": True,
+        "has_outrights": False,
+    },
+    {
+        "key": "tennis_atp_us_open",
+        "group": "Tennis",
+        "title": "ATP US Open",
+        "active": True,
+        "has_outrights": False,
+    },
+    {
+        "key": "tennis_atp_us_open_winner",
+        "group": "Tennis",
+        "title": "ATP US Open Winner",
+        "active": True,
+        "has_outrights": True,
+    },
+]
+
+
+class TestListSports:
+    def test_parses_sport_catalog_entries(self):
+        def handler(request: httpx.Request) -> httpx.Response:
+            assert request.url.path == "/sports"
+            return httpx.Response(200, json=SPORTS_RESPONSE)
+
+        sports = _provider(handler).list_sports()
+
+        assert len(sports) == 3
+        by_key = {s.key: s for s in sports}
+        assert by_key["tennis_atp_us_open"].group == "Tennis"
+        assert by_key["tennis_atp_us_open"].active is True
+        assert by_key["tennis_atp_us_open"].has_outrights is False
+        assert by_key["tennis_atp_us_open_winner"].has_outrights is True
+
+
 class TestErrorHandling:
     def test_auth_error(self):
         def handler(request: httpx.Request) -> httpx.Response:

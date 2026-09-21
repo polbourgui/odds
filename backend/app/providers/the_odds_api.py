@@ -20,6 +20,7 @@ from app.providers.base import (
     ProviderMarket,
     ProviderOutcome,
     ProviderResult,
+    ProviderSport,
     ResultsProvider,
 )
 from app.providers.exceptions import (
@@ -131,6 +132,15 @@ def _parse_result(raw: dict) -> ProviderResult:
     )
 
 
+def _parse_sport(raw: dict) -> ProviderSport:
+    return ProviderSport(
+        key=raw["key"],
+        group=raw.get("group", ""),
+        active=bool(raw.get("active")),
+        has_outrights=bool(raw.get("has_outrights")),
+    )
+
+
 def _parse_event_odds(raw: dict, sport_key: str) -> ProviderEventOdds:
     event = _parse_event(raw, sport_key)
     bookmakers = []
@@ -229,6 +239,12 @@ class TheOddsApiProvider(OddsProvider, ResultsProvider):
                 for bm in event_odds.bookmakers:
                     bm.markets = [m for m in bm.markets if m.market_type in wanted]
         return results
+
+    def list_sports(self) -> list[ProviderSport]:
+        # Without all=true, The Odds API's /sports already returns only
+        # currently in-season/active entries.
+        raw_sports = self._get("/sports", params={})
+        return [_parse_sport(raw) for raw in raw_sports]
 
     def fetch_results(
         self, sport_key: str, event_ids: list[str] | None = None

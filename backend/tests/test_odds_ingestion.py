@@ -11,9 +11,14 @@ from app.providers.base import (
     ProviderEventOdds,
     ProviderMarket,
     ProviderOutcome,
+    ProviderSport,
 )
 from app.providers.exceptions import ProviderError
-from app.services.odds_ingestion import OddsIngestionService, run_ingestion_for_tracked_sports
+from app.services.odds_ingestion import (
+    OddsIngestionService,
+    resolve_sport_keys,
+    run_ingestion_for_tracked_sports,
+)
 
 EVENT = ProviderEvent(
     provider_event_id="evt-1",
@@ -42,6 +47,9 @@ class FakeProvider(OddsProvider):
 
     def fetch_events(self, sport_key: str) -> list[ProviderEvent]:
         return [eo.event for eo in self._event_odds_list]
+
+    def list_sports(self):
+        return []
 
     def fetch_odds(self, sport_key: str, market_types=None) -> list[ProviderEventOdds]:
         return self._event_odds_list
@@ -118,11 +126,19 @@ class MultiSportFakeProvider(OddsProvider):
 
     name = "multi_sport_fake_provider"
 
-    def __init__(self, by_sport_key: dict[str, list[ProviderEventOdds] | Exception]):
+    def __init__(
+        self,
+        by_sport_key: dict[str, list[ProviderEventOdds] | Exception],
+        sports: list[ProviderSport] | None = None,
+    ):
         self._by_sport_key = by_sport_key
+        self._sports = sports or []
 
     def fetch_events(self, sport_key: str) -> list[ProviderEvent]:
         raise NotImplementedError
+
+    def list_sports(self) -> list[ProviderSport]:
+        return self._sports
 
     def fetch_odds(self, sport_key: str, market_types=None) -> list[ProviderEventOdds]:
         outcome = self._by_sport_key.get(sport_key, [])
@@ -164,3 +180,83 @@ class TestRunIngestionForTrackedSports:
         assert len(results) == 1
         assert results[0].events_seen == 1
         assert db_session.query(OddsSnapshot).count() == 6
+
+    def test_dynamic_sport_group_gets_ingested_alongside_tracked_keys(self, db_session):
+        provider = MultiSportFakeProvider(
+            {
+                "soccer_epl": [make_event_odds()],
+                "tennis_atp_us_open": [make_event_odds()],
+            },
+            sports=[
+                ProviderSport(
+                    key="tennis_atp_us_open", group="Tennis", active=True, has_outrights=False
+                ),
+            ],
+        )
+        settings = Settings(
+            _env_file=None,
+            tracked_sport_keys=["soccer_epl"],
+            dynamic_sport_groups=["Tennis"],
+        )
+
+        results = run_ingestion_for_tracked_sports(db_session, provider, settings=settings)
+
+        assert [r.events_seen for r in results] == [1, 1]
+        assert db_session.query(OddsSnapshot).count() == 12
+
+
+class TestResolveSportKeys:
+    def test_appends_active_non_outright_entries_from_dynamic_groups(self):
+        provider = MultiSportFakeProvider(
+            {},
+            sports=[
+                ProviderSport(
+                    key="tennis_atp_us_open", group="Tennis", active=True, has_outrights=False
+                ),
+                ProviderSport(
+                    key="tennis_atp_us_open_winner",
+                    group="Tennis",
+                    active=True,
+                    has_outrights=True,
+                ),
+                ProviderSport(key="golf_pga", group="Golf", active=True, has_outrights=False),
+                ProviderSport(
+                    key="tennis_wta_old_event", group="Tennis", active=False, has_outrights=False
+                ),
+            ],
+        )
+        settings = Settings(
+            _env_file=None,
+            tracked_sport_keys=["soccer_epl"],
+            dynamic_sport_groups=["Tennis"],
+        )
+
+        keys = resolve_sport_keys(provider, settings)
+
+        # tennis_atp_us_open: active, non-outright, right group -> included.
+        # tennis_atp_us_open_winner: outright market -> excluded.
+        # golf_pga: right kind of entry, wrong group -> excluded.
+        # tennis_wta_old_event: right group, but not active -> excluded.
+        assert keys == ["soccer_epl", "tennis_atp_us_open"]
+
+    def test_no_dynamic_groups_configured_skips_the_catalog_call(self):
+        provider = MultiSportFakeProvider({}, sports=[])
+        settings = Settings(
+            _env_file=None, tracked_sport_keys=["soccer_epl"], dynamic_sport_groups=[]
+        )
+
+        assert resolve_sport_keys(provider, settings) == ["soccer_epl"]
+
+    def test_catalog_error_falls_back_to_the_static_list(self):
+        class BrokenCatalogProvider(MultiSportFakeProvider):
+            def list_sports(self):
+                raise ProviderError("boom")
+
+        provider = BrokenCatalogProvider({})
+        settings = Settings(
+            _env_file=None,
+            tracked_sport_keys=["soccer_epl"],
+            dynamic_sport_groups=["Tennis"],
+        )
+
+        assert resolve_sport_keys(provider, settings) == ["soccer_epl"]

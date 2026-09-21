@@ -245,15 +245,27 @@ Fonctions pures, sans dépendance DB/réseau :
   rétro-remplit `closing_odds`/`clv` sur les paris fictifs encore en attente de
   clôture. Idempotent, ignore les cotes capturées après le coup d'envoi.
 - `app/scheduler.py` : process autonome (APScheduler) avec trois jobs périodiques —
-  ingestion des cotes (`run_ingestion_for_tracked_sports`, un `sport_key` du provider
-  par entrée de `TRACKED_SPORT_KEYS`, une erreur sur l'un n'interrompt pas les
-  autres), capture de clôture, règlement automatique — séparé du process web FastAPI
-  exprès : un scheduler démarré dans le lifespan FastAPI tournerait aussi pendant les
-  tests et taperait sur une vraie base non configurée. À lancer avec `python -m
-  app.scheduler` ; sur Render, c'est le process d'un **Background Worker**, distinct
-  du **Web Service** qui sert l'API — c'est aussi ce process qui tient à jour le
-  tableau des value bets en production (le web service ne fait qu'exposer/calculer à
-  partir des cotes déjà en base, il n'en récupère jamais lui-même).
+  ingestion des cotes (`run_ingestion_for_tracked_sports`), capture de clôture,
+  règlement automatique — séparé du process web FastAPI exprès : un scheduler
+  démarré dans le lifespan FastAPI tournerait aussi pendant les tests et taperait
+  sur une vraie base non configurée. À lancer avec `python -m app.scheduler` ; sur
+  Render, c'est le process d'un **Background Worker**, distinct du **Web Service**
+  qui sert l'API — c'est aussi ce process qui tient à jour le tableau des value
+  bets en production (le web service ne fait qu'exposer/calculer à partir des
+  cotes déjà en base, il n'en récupère jamais lui-même). Une erreur sur un
+  `sport_key` n'interrompt pas les autres.
+- `resolve_sport_keys` (`app/services/odds_ingestion.py`) : la liste de
+  `sport_key` réellement ingérée à chaque run = `TRACKED_SPORT_KEYS` (des clés de
+  saison stables, ex. `soccer_epl`) **plus** une découverte dynamique via
+  `OddsProvider.list_sports()` pour chaque groupe listé dans
+  `DYNAMIC_SPORT_GROUPS` (ex. `Tennis`). Nécessaire parce que The Odds API ne
+  propose pas de clé de saison stable pour les sports individuels/à tournois —
+  chaque tournoi a sa propre clé (`tennis_atp_us_open`, ...) qui n'existe que
+  pendant que ce tournoi est en cours ; les entrées de marché outright
+  (`has_outrights=true`, ex. "vainqueur du tournoi") sont toujours ignorées, ce
+  produit ne pricant que des marchés match par match (1X2/moneyline/totals). Une
+  erreur en listant le catalogue dégrade proprement vers `TRACKED_SPORT_KEYS`
+  seul plutôt que de faire échouer tout le job.
 - `GET/PATCH /api/bankroll`, `POST /api/bankroll/reset`, `GET/POST /api/paper-bets`,
   `POST /api/paper-bets/{id}/settle`.
 - Frontend : bouton "Parier" sur chaque ligne du tableau des value bets, badge de

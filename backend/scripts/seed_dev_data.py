@@ -31,6 +31,9 @@ class SeedProvider(OddsProvider):
     def fetch_events(self, sport_key: str) -> list[ProviderEvent]:
         return [eo.event for eo in self._event_odds_list]
 
+    def list_sports(self):
+        return []
+
     def fetch_odds(self, sport_key: str, market_types=None) -> list[ProviderEventOdds]:
         return [eo for eo in self._event_odds_list if eo.event.sport_key == sport_key]
 

@@ -101,10 +101,41 @@ class OddsIngestionService:
         )
 
 
+def resolve_sport_keys(provider: OddsProvider, settings: Settings) -> list[str]:
+    """settings.tracked_sport_keys, plus currently active sport_keys for any
+    group in settings.dynamic_sport_groups (e.g. "Tennis") — how tournament-
+    scoped sports are tracked without hardcoding which tournament is live.
+
+    A failure listing the catalog only drops the dynamic portion; the
+    statically tracked sports still get ingested.
+    """
+    keys = list(settings.tracked_sport_keys)
+    if not settings.dynamic_sport_groups:
+        return keys
+
+    try:
+        catalog = provider.list_sports()
+    except ProviderError:
+        logger.error("Failed to list provider sport catalog", exc_info=True)
+        return keys
+
+    seen = set(keys)
+    for sport in catalog:
+        if (
+            sport.active
+            and not sport.has_outrights
+            and sport.group in settings.dynamic_sport_groups
+            and sport.key not in seen
+        ):
+            keys.append(sport.key)
+            seen.add(sport.key)
+    return keys
+
+
 def run_ingestion_for_tracked_sports(
     db: Session, provider: OddsProvider, settings: Settings | None = None
 ) -> list[IngestionResult]:
-    """Ingest fresh odds for every sport_key in settings.tracked_sport_keys.
+    """Ingest fresh odds for every resolved sport_key (see resolve_sport_keys).
 
     Used by the periodic scheduler job. A provider error on one sport_key
     (already logged by ingest_sport) doesn't stop the others from running.
@@ -112,7 +143,7 @@ def run_ingestion_for_tracked_sports(
     settings = settings or get_settings()
     service = OddsIngestionService(db, provider, settings=settings)
     results = []
-    for sport_key in settings.tracked_sport_keys:
+    for sport_key in resolve_sport_keys(provider, settings):
         try:
             results.append(service.ingest_sport(sport_key))
         except ProviderError:

@@ -52,6 +52,17 @@ class ProviderEventOdds(BaseModel):
     bookmakers: list[ProviderBookmakerQuote]
 
 
+class ProviderSport(BaseModel):
+    """One entry from the provider's sport catalog. Used to auto-discover
+    sport_keys for tournament-scoped sports (tennis, golf, ...) that have no
+    single stable season-long key the way soccer_epl/basketball_nba do."""
+
+    key: str
+    group: str
+    active: bool
+    has_outrights: bool
+
+
 class ProviderResult(BaseModel):
     """The outcome of a finished (or in-progress) event, for automatic
     settlement. Scores are in whatever unit the sport uses (goals, points,
@@ -79,6 +90,11 @@ class OddsProvider(ABC):
         self, sport_key: str, market_types: list[MarketType] | None = None
     ) -> list[ProviderEventOdds]:
         """Fetch current odds for a sport, across bookmakers and markets."""
+
+    @abstractmethod
+    def list_sports(self) -> list[ProviderSport]:
+        """List the provider's sport catalog, active entries only. Used to
+        auto-discover current sport_keys for tournament-scoped sports."""
 
 
 class ResultsProvider(ABC):

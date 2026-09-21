@@ -44,13 +44,12 @@ class Settings(BaseSettings):
 
     # Provider sport_keys to poll periodically for fresh odds (see
     # app/scheduler.py). Adjust to match the competitions you actually want
-    # to track. Only season-long team-sport keys are safe to hardcode as
-    # defaults here — The Odds API scopes tennis (and other individual/
-    # tournament sports) per-tournament (e.g. "tennis_atp_us_open"), with
-    # keys that only exist while that tournament is live, so there's no
-    # single stable "tennis_atp" key to default to. Check
-    # https://api.the-odds-api.com/v4/sports?apiKey=YOUR_KEY for the
-    # current list of valid keys, including whichever tournaments are on.
+    # to track. Only season-long team-sport keys belong here — The Odds API
+    # scopes tennis (and other individual/tournament sports) per-tournament
+    # (e.g. "tennis_atp_us_open"), with keys that only exist while that
+    # tournament is live, so there's no single stable key for those sports
+    # to hardcode. See dynamic_sport_groups below for how those are handled
+    # instead.
     tracked_sport_keys: Annotated[list[str], NoDecode] = [
         "soccer_epl",
         "soccer_france_ligue_one",
@@ -59,6 +58,19 @@ class Settings(BaseSettings):
     ]
 
     _split_tracked_sport_keys = field_validator("tracked_sport_keys", mode="before")(_csv_to_list)
+
+    # Provider sport "groups" (as returned by OddsProvider.list_sports) to
+    # auto-discover currently active sport_keys for, in addition to
+    # tracked_sport_keys — how tournament-scoped sports like tennis are
+    # tracked without needing to hand-maintain which tournament is live.
+    # Outright/winner-market entries (has_outrights=True) are always
+    # skipped: this app only prices match-level markets (1X2/moneyline/
+    # totals).
+    dynamic_sport_groups: Annotated[list[str], NoDecode] = ["Tennis"]
+
+    _split_dynamic_sport_groups = field_validator("dynamic_sport_groups", mode="before")(
+        _csv_to_list
+    )
 
     odds_ingestion_interval_minutes: int = 5
 
