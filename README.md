@@ -51,6 +51,7 @@ frontend/
     api/            # client HTTP vers l'API FastAPI
     components/      # ComplianceBanner, Filters, ValueBetsTable
     hooks/           # useValueBets (fetch + polling)
+    pages/           # ValueBetsPage ("/"), EventComparisonPage ("/events/:id")
 ```
 
 ## Module de calcul (`app/core/calculations.py`)
@@ -103,10 +104,17 @@ Fonctions pures, sans dépendance DB/réseau :
   toutes les issues est exclu en bloc plutôt que dévigué partiellement.
 - `GET /api/value-bets` (filtres `sport`, `market`, `bookmaker`, `edge_min`), `GET
   /api/sports`, `GET /api/bookmakers` (liste uniquement les books ANJ actifs).
+- `get_event_comparison` (`app/services/event_comparison.py`) : pour un événement,
+  toutes les cotes de chaque sélection côte à côte (y compris la référence sharp, pour
+  contexte), meilleure cote ANJ surlignée, écart vs référence (cote juste dévigée si le
+  sharp couvre tout le marché, sinon sa cote brute). Contrairement au tableau des value
+  bets, une cote périmée n'est pas masquée ici mais montrée grisée (`is_stale`) — jamais
+  éligible à "meilleure cote". `GET /api/events/{id}/comparison`.
 - Frontend : `ValueBetsTable` (TanStack Table) — tri par colonne, filtres, chiffres en
   police monospace alignés à droite, edge coloré vert/rouge, rafraîchissement
-  automatique toutes les 30s. Comparateur par événement (cotes côte à côte) non encore
-  livré — prévu dans une étape suivante.
+  automatique toutes les 30s. Chaque ligne renvoie vers `EventComparisonPage`
+  (`/events/:id`, react-router) : une table par marché, cotes de tous les books côte à
+  côte, meilleure cote surlignée en vert, écart vs référence affiché sous chaque cote.
 
 ## Lancer le projet en local
 

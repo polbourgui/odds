@@ -8,12 +8,10 @@ edge/Kelly computation happens, per the brief's freshness requirement.
 """
 
 from collections import defaultdict
-from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import func, select
-from sqlalchemy.orm import Session, aliased
+from sqlalchemy.orm import Session
 
 from app.core.calculations import DevigMethod, devig, fair_odds, kelly_stake
 from app.core.calculations import edge as compute_edge
@@ -21,6 +19,7 @@ from app.core.config import Settings, get_settings
 from app.models.enums import MarketType, SelectionCode
 from app.models.markets import EventMarket
 from app.models.odds import OddsSnapshot
+from app.services.odds_query import as_utc, latest_snapshots
 
 
 @dataclass
@@ -46,29 +45,6 @@ class ValueBet:
     reference_captured_at: datetime
 
 
-def _as_utc(value: datetime) -> datetime:
-    # SQLite (used in tests) drops tzinfo on round-trip even for
-    # DateTime(timezone=True) columns; Postgres (production) does not, so
-    # this is a no-op there. Values are stored/produced in UTC throughout.
-    return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
-
-
-def _latest_snapshots(db: Session) -> Sequence[OddsSnapshot]:
-    """One row per (selection_id, bookmaker_id): its most recent snapshot."""
-    row_number = (
-        func.row_number()
-        .over(
-            partition_by=(OddsSnapshot.selection_id, OddsSnapshot.bookmaker_id),
-            order_by=OddsSnapshot.captured_at.desc(),
-        )
-        .label("rn")
-    )
-    subq = select(OddsSnapshot, row_number).subquery()
-    latest = aliased(OddsSnapshot, subq)
-    stmt = select(latest).where(subq.c.rn == 1)
-    return db.scalars(stmt).all()
-
-
 def compute_value_bets(
     db: Session,
     *,
@@ -81,7 +57,7 @@ def compute_value_bets(
     settings = settings or get_settings()
     stale_cutoff = datetime.now(UTC) - timedelta(minutes=settings.stale_odds_minutes)
 
-    fresh_snapshots = [s for s in _latest_snapshots(db) if _as_utc(s.captured_at) >= stale_cutoff]
+    fresh_snapshots = [s for s in latest_snapshots(db) if as_utc(s.captured_at) >= stale_cutoff]
 
     by_market: dict[int, list[OddsSnapshot]] = defaultdict(list)
     for snapshot in fresh_snapshots:
@@ -116,7 +92,7 @@ def compute_value_bets(
         selection_ids = (sel.id for sel in ordered_selections)
         prob_by_selection = dict(zip(selection_ids, true_probs, strict=True))
         reference_captured_at = min(
-            _as_utc(s.captured_at) for s in sharp_by_selection.values()
+            as_utc(s.captured_at) for s in sharp_by_selection.values()
         )
 
         for snapshot in market_snapshots:
@@ -140,7 +116,7 @@ def compute_value_bets(
                     competition_name=event.competition.name,
                     home_name=event.home_participant.name,
                     away_name=event.away_participant.name,
-                    start_time=_as_utc(event.start_time),
+                    start_time=as_utc(event.start_time),
                     market_type=event_market.market_type,
                     line=float(event_market.line) if event_market.line is not None else None,
                     selection_code=selection.code,
@@ -161,7 +137,7 @@ def compute_value_bets(
                         cap_pct=settings.kelly_cap_pct,
                         edge_threshold=settings.edge_threshold,
                     ),
-                    captured_at=_as_utc(snapshot.captured_at),
+                    captured_at=as_utc(snapshot.captured_at),
                     reference_captured_at=reference_captured_at,
                 )
             )

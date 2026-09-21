@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import meta, value_bets
+from app.api.routes import events, meta, value_bets
 from app.core.config import get_settings
 
 settings = get_settings()
@@ -18,6 +18,7 @@ app.add_middleware(
 
 app.include_router(value_bets.router)
 app.include_router(meta.router)
+app.include_router(events.router)
 
 
 @app.get("/api/health")

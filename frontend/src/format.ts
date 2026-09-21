@@ -8,6 +8,12 @@ export function formatPct(value: number): string {
   return `${(value * 100).toFixed(1)}%`;
 }
 
+export function formatSignedPct(value: number): string {
+  const pct = value * 100;
+  const sign = pct > 0 ? "+" : "";
+  return `${sign}${pct.toFixed(1)}%`;
+}
+
 export function formatStake(value: number): string {
   return value.toFixed(2);
 }

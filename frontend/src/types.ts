@@ -44,3 +44,40 @@ export interface Bookmaker {
   name: string;
   is_anj_licensed: boolean;
 }
+
+export interface ComparisonQuote {
+  bookmaker_slug: string;
+  bookmaker_name: string;
+  is_sharp_reference: boolean;
+  is_anj_licensed: boolean;
+  odds: number;
+  captured_at: string;
+  is_stale: boolean;
+  is_best: boolean;
+  deviation_vs_reference: number | null;
+}
+
+export interface ComparisonSelection {
+  selection_code: SelectionCode;
+  participant_name: string | null;
+  reference_odds: number | null;
+  fair_odds: number | null;
+  true_probability: number | null;
+  quotes: ComparisonQuote[];
+}
+
+export interface ComparisonMarket {
+  market_type: MarketType;
+  line: number | null;
+  selections: ComparisonSelection[];
+}
+
+export interface EventComparison {
+  event_id: number;
+  sport_slug: string;
+  competition_name: string;
+  home_name: string;
+  away_name: string;
+  start_time: string;
+  markets: ComparisonMarket[];
+}

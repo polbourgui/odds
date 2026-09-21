@@ -20,16 +20,51 @@ NOW = datetime.now(UTC)
 PINNACLE_ODDS = [2.00, 3.50, 4.00]  # same reference case as test_calculations.py
 
 
-def build_1x2_market(db, *, home_odds=2.30, home_book="winamax_fr", extra_books=()):
-    """A soccer event with a 1X2 market, Pinnacle (sharp) priced on all three
-    outcomes, and `home_book` offering `home_odds` on the home selection."""
-    sport = Sport(slug="soccer", name="Football")
-    db.add(sport)
-    db.flush()
+def _get_or_create_sport(db, slug: str, name: str) -> Sport:
+    sport = db.scalars(select(Sport).where(Sport.slug == slug)).one_or_none()
+    if sport is None:
+        sport = Sport(slug=slug, name=name)
+        db.add(sport)
+        db.flush()
+    return sport
 
-    competition = Competition(sport_id=sport.id, slug="epl", name="EPL")
-    home = Participant(sport_id=sport.id, name="Arsenal", normalized_name="arsenal")
-    away = Participant(sport_id=sport.id, name="Chelsea", normalized_name="chelsea")
+
+def _get_or_create_bookmaker(db, slug: str, **kwargs) -> Bookmaker:
+    bookmaker = db.scalars(select(Bookmaker).where(Bookmaker.slug == slug)).one_or_none()
+    if bookmaker is None:
+        bookmaker = Bookmaker(slug=slug, name=slug, **kwargs)
+        db.add(bookmaker)
+        db.flush()
+    return bookmaker
+
+
+def build_1x2_market(
+    db,
+    *,
+    home_odds=2.30,
+    home_book="winamax_fr",
+    extra_books=(),
+    home_name="Arsenal",
+    away_name="Chelsea",
+    competition_slug="epl",
+    external_ref="evt-1",
+):
+    """A soccer event with a 1X2 market, Pinnacle (sharp) priced on all three
+    outcomes, and `home_book` offering `home_odds` on the home selection.
+
+    Sport/competition/bookmakers are reused by slug across calls so a test
+    can build several independent events without unique-constraint clashes.
+    """
+    sport = _get_or_create_sport(db, "soccer", "Football")
+
+    competition = db.scalars(
+        select(Competition).where(Competition.slug == competition_slug)
+    ).one_or_none()
+    if competition is None:
+        competition = Competition(sport_id=sport.id, slug=competition_slug, name="EPL")
+        db.add(competition)
+    home = Participant(sport_id=sport.id, name=home_name, normalized_name=home_name.lower())
+    away = Participant(sport_id=sport.id, name=away_name, normalized_name=away_name.lower())
     db.add_all([competition, home, away])
     db.flush()
 
@@ -39,7 +74,7 @@ def build_1x2_market(db, *, home_odds=2.30, home_book="winamax_fr", extra_books=
         home_participant_id=home.id,
         away_participant_id=away.id,
         start_time=NOW + timedelta(days=1),
-        external_ref="evt-1",
+        external_ref=external_ref,
     )
     db.add(event)
     db.flush()
@@ -54,11 +89,10 @@ def build_1x2_market(db, *, home_odds=2.30, home_book="winamax_fr", extra_books=
     db.add_all([home_sel, draw_sel, away_sel])
     db.flush()
 
-    pinnacle = Bookmaker(slug="pinnacle", name="Pinnacle", is_sharp_reference=True)
-    book = Bookmaker(slug=home_book, name=home_book, is_anj_licensed=True)
-    db.add_all([pinnacle, book])
+    pinnacle = _get_or_create_bookmaker(db, "pinnacle", is_sharp_reference=True)
+    book = _get_or_create_bookmaker(db, home_book, is_anj_licensed=True)
     for slug in extra_books:
-        db.add(Bookmaker(slug=slug, name=slug, is_anj_licensed=True))
+        _get_or_create_bookmaker(db, slug, is_anj_licensed=True)
     db.flush()
 
     for sel, price in zip([home_sel, draw_sel, away_sel], PINNACLE_ODDS, strict=True):

@@ -7,6 +7,7 @@ import {
   type SortingState,
 } from "@tanstack/react-table";
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import {
   formatFreshness,
   formatKickoff,
@@ -32,7 +33,11 @@ const columns = [
   columnHelper.display({
     id: "event",
     header: "Événement",
-    cell: (info) => `${info.row.original.home_name} – ${info.row.original.away_name}`,
+    cell: (info) => (
+      <Link className={styles.eventLink} to={`/events/${info.row.original.event_id}`}>
+        {info.row.original.home_name} – {info.row.original.away_name}
+      </Link>
+    ),
   }),
   columnHelper.display({
     id: "market",

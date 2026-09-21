@@ -50,3 +50,13 @@
   width: 10px;
   color: var(--accent);
 }
+
+.eventLink {
+  color: var(--text);
+  text-decoration: none;
+}
+
+.eventLink:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}

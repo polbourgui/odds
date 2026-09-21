@@ -1,19 +1,6 @@
 import pytest
-from fastapi.testclient import TestClient
 
-from app.db.session import get_db
-from app.main import app
 from tests.test_value_bets import build_1x2_market
-
-
-@pytest.fixture
-def client(db_session):
-    def _override_get_db():
-        yield db_session
-
-    app.dependency_overrides[get_db] = _override_get_db
-    yield TestClient(app)
-    app.dependency_overrides.clear()
 
 
 class TestHealth:

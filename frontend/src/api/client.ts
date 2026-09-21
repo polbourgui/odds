@@ -1,4 +1,4 @@
-import type { Bookmaker, Sport, ValueBet } from "../types";
+import type { Bookmaker, EventComparison, Sport, ValueBet } from "../types";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 
@@ -43,4 +43,16 @@ export function fetchSports(): Promise<Sport[]> {
 
 export function fetchBookmakers(): Promise<Bookmaker[]> {
   return getJSON<Bookmaker[]>("/api/bookmakers");
+}
+
+export async function fetchEventComparison(eventId: number): Promise<EventComparison | null> {
+  const url = new URL(`/api/events/${eventId}/comparison`, API_BASE_URL);
+  const response = await fetch(url.toString());
+  if (response.status === 404) {
+    return null;
+  }
+  if (!response.ok) {
+    throw new Error(`Request to /api/events/${eventId}/comparison failed: HTTP ${response.status}`);
+  }
+  return response.json() as Promise<EventComparison>;
 }
