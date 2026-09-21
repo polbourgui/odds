@@ -53,8 +53,15 @@ class Settings(BaseSettings):
     tracked_sport_keys: Annotated[list[str], NoDecode] = [
         "soccer_epl",
         "soccer_france_ligue_one",
+        "soccer_spain_la_liga",
+        "soccer_italy_serie_a",
+        "soccer_germany_bundesliga",
         "soccer_uefa_champs_league",
+        "soccer_uefa_europa_league",
         "basketball_nba",
+        "basketball_euroleague",
+        "icehockey_nhl",
+        "mma_mixed_martial_arts",
     ]
 
     _split_tracked_sport_keys = field_validator("tracked_sport_keys", mode="before")(_csv_to_list)
