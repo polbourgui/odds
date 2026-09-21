@@ -5,6 +5,14 @@ from pydantic import field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
+def _csv_to_list(value: object) -> object:
+    # Used with NoDecode fields so FOO=a,b,c works in .env, alongside the
+    # JSON array syntax pydantic-settings also accepts for non-string input.
+    if isinstance(value, str):
+        return [item.strip() for item in value.split(",") if item.strip()]
+    return value
+
+
 class Settings(BaseSettings):
     """Application configuration, sourced from environment variables / .env."""
 
@@ -29,14 +37,7 @@ class Settings(BaseSettings):
     ]
     sharp_reference_bookmaker_key: str = "pinnacle"
 
-    @field_validator("anj_bookmaker_keys", mode="before")
-    @classmethod
-    def _split_csv(cls, value: object) -> object:
-        # NoDecode above skips pydantic-settings' default JSON-array parsing,
-        # so ANJ_BOOKMAKER_KEYS=winamax_fr,betclic,... works as a plain CSV.
-        if isinstance(value, str):
-            return [item.strip() for item in value.split(",") if item.strip()]
-        return value
+    _split_anj_bookmaker_keys = field_validator("anj_bookmaker_keys", mode="before")(_csv_to_list)
 
     stale_odds_minutes: int = 10
 
@@ -49,6 +50,15 @@ class Settings(BaseSettings):
     monthly_loss_limit: float | None = None
 
     log_level: str = "INFO"
+
+    # Frontend origins allowed to call the API (Vite dev server + the Vercel
+    # deployment). Comma-separated in .env, e.g. "https://odds.vercel.app".
+    cors_allow_origins: Annotated[list[str], NoDecode] = [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ]
+
+    _split_cors_origins = field_validator("cors_allow_origins", mode="before")(_csv_to_list)
 
 
 @lru_cache

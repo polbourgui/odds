@@ -10,12 +10,12 @@ cotes à une référence sharp, calcul d'edge et de mise Kelly, suivi de paris f
 
 ## État du projet
 
-Livraison en cours par étapes (voir le brief). Étape actuelle : **2/6 — adaptateur de
-cotes et stockage des snapshots**.
+Livraison en cours par étapes (voir le brief). Étape actuelle : **3/6 — API et
+tableau des value bets**.
 
 - [x] 1. Schéma BDD, module de calcul et tests
 - [x] 2. Adaptateur de cotes fonctionnel et stockage des snapshots
-- [ ] 3. API et tableau des value bets
+- [x] 3. API et tableau des value bets
 - [ ] 4. Paper betting et capture de clôture
 - [ ] 5. Statistiques, réglages, export
 - [ ] 6. Déploiement (Vercel + Render), durcissement
@@ -35,14 +35,22 @@ déploiement par push Git, sans Dockerfile). Ce choix ne change rien au code dé
 ```
 backend/
   app/
-    core/          # configuration, module de calcul pur (devig, edge, Kelly, CLV)
+    api/routes/     # endpoints FastAPI (value-bets, sports, bookmakers)
+    core/           # configuration, module de calcul pur (devig, edge, Kelly, CLV)
     db/             # base SQLAlchemy déclarative, session
     models/         # schéma de données (sports, événements, cotes, paper bets, ...)
     providers/      # interface OddsProvider + adaptateur The Odds API
-    services/       # normalisation, rapprochement d'événements, ingestion des cotes
+    schemas/        # DTOs Pydantic exposés par l'API
+    services/       # normalisation, rapprochement, ingestion, calcul des value bets
+    main.py         # app FastAPI
   migrations/       # Alembic
+  scripts/          # scripts dev (seed_dev_data.py)
   tests/            # pytest
-frontend/           # React + TypeScript + Vite (à venir)
+frontend/
+  src/
+    api/            # client HTTP vers l'API FastAPI
+    components/      # ComplianceBanner, Filters, ValueBetsTable
+    hooks/           # useValueBets (fetch + polling)
 ```
 
 ## Module de calcul (`app/core/calculations.py`)
@@ -84,6 +92,38 @@ Fonctions pures, sans dépendance DB/réseau :
    fuiter des erreurs de transport.
 3. `OddsIngestionService` et `EventReconciler` fonctionnent avec n'importe quel
    `OddsProvider` sans modification — seul `provider.name` sert à scoper les alias.
+
+## API et tableau des value bets (`app/api/`, `app/services/value_bets.py`, `frontend/`)
+
+- `compute_value_bets` (`app/services/value_bets.py`) : prend la cote la plus récente
+  par (sélection, bookmaker), dévigue le marché complet du bookmaker sharp (référence)
+  pour obtenir les probabilités vraies, puis calcule edge et mise Kelly pour chaque book
+  ANJ. Une cote — sharp ou ANJ — plus vieille que `stale_odds_minutes` est exclue avant
+  tout calcul (jamais affichée comme valide), et un marché où le sharp ne couvre pas
+  toutes les issues est exclu en bloc plutôt que dévigué partiellement.
+- `GET /api/value-bets` (filtres `sport`, `market`, `bookmaker`, `edge_min`), `GET
+  /api/sports`, `GET /api/bookmakers` (liste uniquement les books ANJ actifs).
+- Frontend : `ValueBetsTable` (TanStack Table) — tri par colonne, filtres, chiffres en
+  police monospace alignés à droite, edge coloré vert/rouge, rafraîchissement
+  automatique toutes les 30s. Comparateur par événement (cotes côte à côte) non encore
+  livré — prévu dans une étape suivante.
+
+## Lancer le projet en local
+
+```bash
+# Backend
+cd backend
+source .venv/bin/activate
+export DATABASE_URL=postgresql+psycopg://odds:odds@localhost:5432/odds
+alembic upgrade head
+python scripts/seed_dev_data.py   # données de démo via le pipeline d'ingestion réel
+uvicorn app.main:app --reload
+
+# Frontend (autre terminal)
+cd frontend
+cp .env.example .env.local
+npm run dev
+```
 
 ## Développement backend
 

@@ -1,0 +1,12 @@
+.banner {
+  background: var(--bg-raised);
+  border-bottom: 1px solid var(--border);
+  padding: 6px 16px;
+  font-size: 12px;
+  color: var(--text-dim);
+  text-align: center;
+}
+
+.banner strong {
+  color: var(--text);
+}

@@ -1,0 +1,86 @@
+:root {
+  --bg: #0b0c0f;
+  --bg-raised: #131418;
+  --bg-hover: #191b20;
+  --border: #262832;
+  --text: #c7cad1;
+  --text-dim: #7d818d;
+  --text-h: #eef0f3;
+
+  --accent: #4d8dff;
+  --accent-dim: #2f5aa8;
+
+  --positive: #35c46b;
+  --negative: #e5484d;
+
+  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
+  --mono: ui-monospace, 'SF Mono', 'Cascadia Code', Consolas, monospace;
+
+  color-scheme: dark;
+  font: 14px/1.45 var(--sans);
+  color: var(--text);
+  background: var(--bg);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  min-height: 100vh;
+}
+
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+h1,
+h2,
+h3 {
+  color: var(--text-h);
+  font-weight: 600;
+  margin: 0;
+}
+
+a {
+  color: var(--accent);
+}
+
+.mono {
+  font-family: var(--mono);
+}
+
+.num {
+  font-family: var(--mono);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.positive {
+  color: var(--positive);
+}
+
+.negative {
+  color: var(--negative);
+}
+
+button,
+select,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+::selection {
+  background: var(--accent-dim);
+  color: var(--text-h);
+}
