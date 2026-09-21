@@ -18,7 +18,17 @@ cotes et stockage des snapshots**.
 - [ ] 3. API et tableau des value bets
 - [ ] 4. Paper betting et capture de clôture
 - [ ] 5. Statistiques, réglages, export
-- [ ] 6. Docker Compose, durcissement
+- [ ] 6. Déploiement (Vercel + Render), durcissement
+
+## Déploiement (décision prise, mise en œuvre à l'étape 6)
+
+Pas de Docker : le frontend React/Vite est déployé sur **Vercel** (détection
+automatique, aucune config particulière). Le backend FastAPI a besoin d'un process
+persistant pour le scheduler de rafraîchissement des cotes (APScheduler) — ce que
+Vercel (serverless) ne permet pas nativement — donc il est déployé séparément sur
+**Render** (web service Python natif + PostgreSQL managé sur la même plateforme,
+déploiement par push Git, sans Dockerfile). Ce choix ne change rien au code déjà
+écrit (étapes 1-2) : SQLAlchemy/FastAPI/APScheduler restent agnostiques de l'hébergeur.
 
 ## Structure
 
