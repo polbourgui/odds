@@ -79,7 +79,7 @@ class Settings(BaseSettings):
     # keys exposed by whichever provider/region is active.
     anj_bookmaker_keys: Annotated[list[str], NoDecode] = [
         "winamax_fr",
-        "betclic",
+        "betclic_fr",
         "unibet_fr",
         "zebet_fr",
         "pmu_fr",

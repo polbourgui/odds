@@ -6,7 +6,7 @@ class TestAnjBookmakerKeys:
         settings = Settings(_env_file=None)
         assert settings.anj_bookmaker_keys == [
             "winamax_fr",
-            "betclic",
+            "betclic_fr",
             "unibet_fr",
             "zebet_fr",
             "pmu_fr",
