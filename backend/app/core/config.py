@@ -44,12 +44,17 @@ class Settings(BaseSettings):
 
     # Provider sport_keys to poll periodically for fresh odds (see
     # app/scheduler.py). Adjust to match the competitions you actually want
-    # to track.
+    # to track. Only season-long team-sport keys are safe to hardcode as
+    # defaults here — The Odds API scopes tennis (and other individual/
+    # tournament sports) per-tournament (e.g. "tennis_atp_us_open"), with
+    # keys that only exist while that tournament is live, so there's no
+    # single stable "tennis_atp" key to default to. Check
+    # https://api.the-odds-api.com/v4/sports?apiKey=YOUR_KEY for the
+    # current list of valid keys, including whichever tournaments are on.
     tracked_sport_keys: Annotated[list[str], NoDecode] = [
         "soccer_epl",
         "soccer_france_ligue_one",
         "soccer_uefa_champs_league",
-        "tennis_atp",
         "basketball_nba",
     ]
 
