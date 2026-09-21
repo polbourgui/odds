@@ -18,6 +18,7 @@ import {
   formatStake,
 } from "../format";
 import type { ValueBet } from "../types";
+import { PlaceBetButton } from "./PlaceBetButton";
 import styles from "./ValueBetsTable.module.css";
 
 const columnHelper = createColumnHelper<ValueBet>();
@@ -79,6 +80,16 @@ const columns = [
   columnHelper.accessor("captured_at", {
     header: "Fraîcheur",
     cell: (info) => <span className="num">{formatFreshness(info.getValue())}</span>,
+  }),
+  columnHelper.display({
+    id: "place_bet",
+    header: "",
+    cell: (info) => (
+      <PlaceBetButton
+        selectionId={info.row.original.selection_id}
+        bookmakerSlug={info.row.original.bookmaker_slug}
+      />
+    ),
   }),
 ];
 

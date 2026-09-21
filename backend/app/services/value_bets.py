@@ -32,6 +32,7 @@ class ValueBet:
     start_time: datetime
     market_type: MarketType
     line: float | None
+    selection_id: int
     selection_code: SelectionCode
     participant_name: str | None
     bookmaker_slug: str
@@ -119,6 +120,7 @@ def compute_value_bets(
                     start_time=as_utc(event.start_time),
                     market_type=event_market.market_type,
                     line=float(event_market.line) if event_market.line is not None else None,
+                    selection_id=selection.id,
                     selection_code=selection.code,
                     participant_name=(
                         selection.participant.name if selection.participant is not None else None

@@ -1,0 +1,9 @@
+.badge {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.value {
+  font-family: var(--mono);
+  color: var(--text-h);
+}

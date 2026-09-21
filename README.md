@@ -10,13 +10,13 @@ cotes à une référence sharp, calcul d'edge et de mise Kelly, suivi de paris f
 
 ## État du projet
 
-Livraison en cours par étapes (voir le brief). Étape actuelle : **3/6 — API et
-tableau des value bets**.
+Livraison en cours par étapes (voir le brief). Étape actuelle : **4/6 — paper
+betting et capture de clôture**.
 
 - [x] 1. Schéma BDD, module de calcul et tests
 - [x] 2. Adaptateur de cotes fonctionnel et stockage des snapshots
-- [x] 3. API et tableau des value bets
-- [ ] 4. Paper betting et capture de clôture
+- [x] 3. API et tableau des value bets (+ comparateur par événement)
+- [x] 4. Paper betting et capture de clôture
 - [ ] 5. Statistiques, réglages, export
 - [ ] 6. Déploiement (Vercel + Render), durcissement
 
@@ -35,23 +35,24 @@ déploiement par push Git, sans Dockerfile). Ce choix ne change rien au code dé
 ```
 backend/
   app/
-    api/routes/     # endpoints FastAPI (value-bets, sports, bookmakers)
+    api/routes/     # endpoints FastAPI (value-bets, sports, bookmakers, events, paper-bets)
     core/           # configuration, module de calcul pur (devig, edge, Kelly, CLV)
     db/             # base SQLAlchemy déclarative, session
     models/         # schéma de données (sports, événements, cotes, paper bets, ...)
     providers/      # interface OddsProvider + adaptateur The Odds API
     schemas/        # DTOs Pydantic exposés par l'API
-    services/       # normalisation, rapprochement, ingestion, calcul des value bets
+    services/       # normalisation, rapprochement, ingestion, value bets, paper betting, capture de clôture
     main.py         # app FastAPI
+    scheduler.py    # process autonome (APScheduler) : capture de clôture périodique
   migrations/       # Alembic
   scripts/          # scripts dev (seed_dev_data.py)
   tests/            # pytest
 frontend/
   src/
     api/            # client HTTP vers l'API FastAPI
-    components/      # ComplianceBanner, Filters, ValueBetsTable
+    components/      # ComplianceBanner, Nav, BankrollBadge, Filters, ValueBetsTable, PlaceBetButton
     hooks/           # useValueBets (fetch + polling)
-    pages/           # ValueBetsPage ("/"), EventComparisonPage ("/events/:id")
+    pages/           # ValueBetsPage ("/"), EventComparisonPage ("/events/:id"), BetHistoryPage ("/bets")
 ```
 
 ## Module de calcul (`app/core/calculations.py`)
@@ -116,6 +117,34 @@ Fonctions pures, sans dépendance DB/réseau :
   (`/events/:id`, react-router) : une table par marché, cotes de tous les books côte à
   côte, meilleure cote surlignée en vert, écart vs référence affiché sous chaque cote.
 
+## Paper betting et capture de clôture (`app/services/paper_bets.py`, `app/services/closing_capture.py`)
+
+- `place_paper_bet` : recalcule le pricing au moment du clic (jamais les valeurs
+  affichées côté client, pour éviter toute manipulation) — cote, probabilité vraie,
+  cote juste, edge et mise Kelly sont figés sur le pari. La mise Kelly est
+  dimensionnée sur le solde **actuel** de la bankroll (pas une constante fixe), pour
+  que le sizing s'adapte réellement à mesure que la bankroll varie. Rejette la
+  création si le book n'est pas agréé ANJ, si la cote ou la référence sharp ne sont
+  plus fraîches, ou si l'edge calculé est sous le seuil (mise Kelly nulle).
+- `settle_paper_bet` : règlement manuel (gagné/perdu/push/annulé) ; le règlement
+  automatique via un flux de résultats n'est pas dans le périmètre V1 (aucun
+  adaptateur de résultats de matchs n'existe — seulement des cotes).
+- `run_closing_capture` (`app/services/closing_capture.py`) : pour un événement dont
+  le coup d'envoi est passé, retrouve le dernier prix de la référence sharp *avant*
+  le coup d'envoi pour chaque sélection, le marque `is_closing`, le dévigue, et
+  rétro-remplit `closing_odds`/`clv` sur les paris fictifs encore en attente de
+  clôture. Idempotent, ignore les cotes capturées après le coup d'envoi.
+- `app/scheduler.py` : process autonome (APScheduler), séparé du process web FastAPI
+  exprès — un scheduler démarré dans le lifespan FastAPI tournerait aussi pendant les
+  tests et taperait sur une vraie base non configurée. À lancer avec
+  `python -m app.scheduler` ; sur Render, c'est le process d'un **Background Worker**,
+  distinct du **Web Service** qui sert l'API.
+- `GET/PATCH /api/bankroll`, `POST /api/bankroll/reset`, `GET/POST /api/paper-bets`,
+  `POST /api/paper-bets/{id}/settle`.
+- Frontend : bouton "Parier" sur chaque ligne du tableau des value bets, badge de
+  bankroll dans la nav, page "Mes paris" (historique, règlement manuel, réglages de
+  la bankroll de départ).
+
 ## Lancer le projet en local
 
 ```bash
@@ -131,6 +160,9 @@ uvicorn app.main:app --reload
 cd frontend
 cp .env.example .env.local
 npm run dev
+
+# Scheduler (autre terminal, optionnel en dev) : capture de clôture périodique
+cd backend && python -m app.scheduler
 ```
 
 ## Développement backend

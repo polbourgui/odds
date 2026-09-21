@@ -17,6 +17,7 @@ class ValueBetOut(BaseModel):
 
     market_type: MarketType
     line: float | None
+    selection_id: int
     selection_code: SelectionCode
     participant_name: str | None
 

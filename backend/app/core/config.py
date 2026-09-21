@@ -51,6 +51,10 @@ class Settings(BaseSettings):
 
     log_level: str = "INFO"
 
+    # How often the standalone scheduler process (app/scheduler.py) runs the
+    # closing-line capture job.
+    closing_capture_interval_minutes: int = 5
+
     # Frontend origins allowed to call the API (Vite dev server + the Vercel
     # deployment). Comma-separated in .env, e.g. "https://odds.vercel.app".
     cors_allow_origins: Annotated[list[str], NoDecode] = [
