@@ -81,6 +81,17 @@ class Settings(BaseSettings):
     default_bankroll: float = 1000.0
     monthly_loss_limit: float | None = None
 
+    @field_validator("monthly_loss_limit", mode="before")
+    @classmethod
+    def _blank_env_value_means_unset(cls, value: object) -> object:
+        # A literal shell/.env environment variable can't be "absent" the
+        # way a missing key can — MONTHLY_LOSS_LIMIT= (blank) is how "not
+        # set" is spelled there, so treat it the same as the field's None
+        # default rather than a float-parsing error.
+        if isinstance(value, str) and value.strip() == "":
+            return None
+        return value
+
     # Shared-secret key required (via the X-API-Key header) on every request
     # once the app is exposed on the public internet. Empty disables the
     # check, which is only appropriate for local development.

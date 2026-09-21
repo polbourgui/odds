@@ -11,7 +11,11 @@ import type {
   ValueBet,
 } from "../types";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
+// Same-origin by default, so a production build served by the backend
+// itself (install.sh's local self-hosted setup) needs no configuration
+// regardless of which host/port it ends up running on. Local dev (Vite on
+// :5173, API on :8000) overrides this via VITE_API_BASE_URL in .env.local.
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || window.location.origin;
 const API_KEY = import.meta.env.VITE_API_KEY;
 
 function authHeaders(): HeadersInit {

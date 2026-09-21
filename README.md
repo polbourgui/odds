@@ -22,18 +22,80 @@ déploiement et durcissement**.
 
 ## Déploiement
 
-Pas de Docker. Le frontend React/Vite est déployé sur **Vercel** (détection
-automatique). Le backend FastAPI a besoin d'un process persistant pour le
-scheduler (APScheduler : ingestion des cotes, capture de clôture, règlement
-automatique) — ce que Vercel (serverless) ne permet pas nativement — donc il
-est déployé séparément sur **Render** : un web service (l'API) et un
-background worker (le scheduler), avec un PostgreSQL managé sur la même
-plateforme. `render.yaml` (racine du repo) définit les trois en Blueprint ;
-`frontend/vercel.json` fait le lien côté Vercel (SPA rewrite pour le routeur
-côté client — sans ça, un rechargement sur `/stats` ou `/events/:id` renvoie
-une 404).
+Pas de Docker, pas de coût d'hébergement obligatoire. Deux options :
 
-### Backend + BDD sur Render
+- **Auto-hébergement local** (recommandé, gratuit) : tout tourne sur une
+  machine Linux à toi (PC, mini-PC, Raspberry Pi, VPS...) via `./install.sh`.
+  C'est l'option documentée en détail ci-dessous.
+- **Vercel + Render** : possible (`render.yaml` / `frontend/vercel.json`
+  sont encore dans le repo), mais Render facture les background workers
+  (nécessaires pour le scheduler) et l'expiration de son PostgreSQL gratuit
+  — ce n'est donc plus l'option par défaut. Voir "Alternative : Vercel +
+  Render" plus bas si tu préfères payer pour cette commodité.
+
+### Auto-hébergement local (`./install.sh`)
+
+Sur une machine Debian/Ubuntu/Raspberry Pi OS (n'importe quel Linux avec
+`apt`), un seul processus **FastAPI sert à la fois l'API et le frontend
+déjà buildé** (pas de Vercel, pas de second serveur, pas de CORS à gérer :
+`app/main.py` sert `frontend/dist` en fallback SPA dès qu'il le trouve — voir
+`app/core/frontend.py`). Un second processus fait tourner le scheduler
+(ingestion des cotes, capture de clôture, règlement automatique).
+`install.sh` installe et configure tout :
+
+```bash
+git clone <ce repo> odds && cd odds
+./install.sh
+```
+
+Le script (idempotent, à relancer après chaque `git pull` pour mettre à
+jour) :
+1. installe les paquets système manquants (Python, PostgreSQL, Node.js) —
+   `sudo` sera demandé ;
+2. crée le rôle et la base PostgreSQL locaux (`odds`/`odds` par défaut,
+   surchargeable via `DB_NAME`/`DB_USER`/`DB_PASSWORD`) ;
+3. crée le venv Python et installe les dépendances backend ;
+4. génère `backend/.env` **une seule fois** (jamais écrasé ensuite) avec une
+   `API_KEY` aléatoire — édite ensuite ce fichier pour renseigner
+   `ODDS_API_KEY` (compte The Odds API), sans quoi aucune cote ne sera
+   récupérée ;
+5. applique les migrations Alembic ;
+6. build le frontend (`npm run build`, avec la même `API_KEY`) ;
+7. installe et démarre deux services **systemd** : `odds-api` (l'API +
+   frontend, port 8000 par défaut, surchargeable via `APP_PORT`) et
+   `odds-scheduler`.
+
+Ensuite : `http://localhost:8000` (ou `http://<ip-de-la-machine>:8000`
+depuis le réseau local). Logs : `sudo journalctl -u odds-api -f` /
+`sudo journalctl -u odds-scheduler -f`. Statut :
+`sudo systemctl status odds-api odds-scheduler`.
+
+### Authentification
+
+Aucun compte utilisateur : l'outil est protégé par un secret partagé unique
+(`API_KEY` côté backend, `VITE_API_KEY` baké dans le build frontend au même
+moment par `install.sh`), envoyé sur chaque requête via l'en-tête
+`X-API-Key` (`app/core/security.py`, appliqué à toutes les routes sauf
+`/api/health`). Vide, la vérification est désactivée (uniquement adapté à
+un accès strictement localhost) ; dès que la machine est joignable au-delà
+(réseau local ou Internet), une clé est nécessaire — sans elle, n'importe
+qui trouvant l'URL pourrait modifier les réglages ou l'historique de paris
+fictifs.
+
+### Alternative : Vercel + Render (payant sur Render au-delà du strict web service)
+
+<details>
+<summary>Déployer sur Vercel + Render au lieu de l'auto-hébergement local</summary>
+
+Le frontend React/Vite se déploie sur **Vercel** (détection automatique).
+Le backend a besoin d'un process persistant pour le scheduler — ce que
+Vercel (serverless) ne permet pas — donc il se déploie séparément sur
+**Render** : un web service (l'API) et un background worker (le
+scheduler), avec un PostgreSQL managé. `render.yaml` (racine du repo)
+définit les trois en Blueprint ; `frontend/vercel.json` fait le lien côté
+Vercel (SPA rewrite pour le routeur côté client).
+
+**Backend + BDD sur Render**
 
 1. Dashboard Render → **New** → **Blueprint**, pointer sur ce repo. Render
    lit `render.yaml` et propose de créer `odds-db` (PostgreSQL managé),
@@ -41,41 +103,26 @@ une 404).
 2. Renseigner les variables marquées `sync: false` dans le Blueprint, sur
    **odds-api** et **odds-scheduler** :
    - `ODDS_API_KEY` : clé du compte The Odds API (ou autre provider).
-   - `API_KEY` (odds-api uniquement) : secret partagé qui protège l'API une
-     fois publique — voir "Authentification" ci-dessous. En générer un avec
+   - `API_KEY` (odds-api uniquement) : secret partagé — voir
+     "Authentification" ci-dessus. En générer un avec
      `python -c "import secrets; print(secrets.token_urlsafe(32))"`.
    - `CORS_ALLOW_ORIGINS` (odds-api uniquement) : l'URL du déploiement
      Vercel une fois connue (ex. `https://odds-xyz.vercel.app`), ajoutée
      après le premier déploiement du frontend.
-3. `DATABASE_URL` est injecté automatiquement depuis `odds-db` — Render
-   fournit une URL `postgresql://...`, réécrite en interne vers le dialecte
-   `+psycopg` (voir `app/core/config.py`), donc rien à faire ici.
+3. `DATABASE_URL` est injecté automatiquement depuis `odds-db`.
 4. Au déploiement, `odds-api` lance `alembic upgrade head` avant de démarrer
-   `uvicorn`, donc le schéma est toujours synchronisé avec le code déployé.
-   `odds-scheduler` lance `python -m app.scheduler`.
+   `uvicorn`. `odds-scheduler` lance `python -m app.scheduler`.
 
-### Frontend sur Vercel
+**Frontend sur Vercel**
 
-1. Dashboard Vercel → **Add New** → **Project**, importer ce repo. Vercel
-   détecte Vite automatiquement (root du projet : `frontend/`, à préciser
-   dans les réglages du projet si le repo entier est importé).
-2. Variables d'environnement :
-   - `VITE_API_BASE_URL` : l'URL du service `odds-api` sur Render (ex.
-     `https://odds-api-xyz.onrender.com`).
-   - `VITE_API_KEY` : la même valeur que `API_KEY` côté Render.
+1. Dashboard Vercel → **Add New** → **Project**, importer ce repo (root du
+   projet : `frontend/`).
+2. Variables d'environnement : `VITE_API_BASE_URL` (l'URL du service
+   `odds-api` sur Render) et `VITE_API_KEY` (même valeur que `API_KEY`).
 3. Déployer, puis reporter l'URL Vercel obtenue dans `CORS_ALLOW_ORIGINS`
-   côté `odds-api` (étape précédente) et redéployer ce service.
+   côté `odds-api` et redéployer ce service.
 
-### Authentification
-
-Aucun compte utilisateur : l'outil est protégé par un secret partagé unique
-(`API_KEY` / `VITE_API_KEY`), envoyé sur chaque requête via l'en-tête
-`X-API-Key` (`app/core/security.py`, appliqué à toutes les routes sauf
-`/api/health` pour que le health check Render reste accessible). Vide en
-local (comportement par défaut, aucune configuration requise), il devient
-obligatoire dès que l'app est exposée publiquement — sans lui, n'importe qui
-trouvant l'URL pourrait modifier les réglages ou l'historique de paris
-fictifs.
+</details>
 
 ## Structure
 
@@ -83,7 +130,7 @@ fictifs.
 backend/
   app/
     api/routes/     # endpoints FastAPI (value-bets, sports, bookmakers, events, paper-bets)
-    core/           # configuration, sécurité (clé API), module de calcul pur (devig, edge, Kelly, CLV)
+    core/           # configuration, sécurité (clé API), service du frontend buildé, module de calcul pur
     db/             # base SQLAlchemy déclarative, session
     models/         # schéma de données (sports, événements, cotes, paper bets, ...)
     providers/      # interface OddsProvider + adaptateur The Odds API
@@ -95,14 +142,15 @@ backend/
   scripts/          # scripts dev (seed_dev_data.py)
   tests/            # pytest
 frontend/
-  vercel.json       # rewrite SPA pour le routeur côté client
+  vercel.json       # rewrite SPA (utilisé seulement pour l'alternative Vercel)
   src/
     api/            # client HTTP vers l'API FastAPI
     components/      # ComplianceBanner, Nav, BankrollBadge, Filters, ValueBetsTable, PlaceBetButton, BankrollChart
     hooks/           # useValueBets (fetch + polling)
     pages/           # ValueBetsPage ("/"), EventComparisonPage ("/events/:id"), BetHistoryPage ("/bets"),
                      # SettingsPage ("/settings"), StatsPage ("/stats")
-render.yaml         # Blueprint Render : web service + scheduler + PostgreSQL managé
+install.sh          # installation/mise à jour auto-hébergée (recommandé, gratuit)
+render.yaml         # Blueprint Render (alternative payante, voir "Déploiement")
 ```
 
 ## Module de calcul (`app/core/calculations.py`)
@@ -247,7 +295,11 @@ Fonctions pures, sans dépendance DB/réseau :
   mensuel activable, bankroll de référence des value bets explicitement distinguée
   de la bankroll de départ du paper betting).
 
-## Lancer le projet en local
+## Développer en local
+
+Pour un usage courant (pas du développement), utilise plutôt `./install.sh`
+ci-dessus — ce qui suit lance chaque process séparément avec rechargement à
+chaud, pour travailler sur le code.
 
 ```bash
 # Backend

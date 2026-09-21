@@ -41,3 +41,16 @@ class TestDatabaseUrlNormalization:
             _env_file=None, database_url="postgresql+psycopg://u:p@host:5432/db"
         )
         assert settings.database_url == "postgresql+psycopg://u:p@host:5432/db"
+
+
+class TestMonthlyLossLimitBlankEnvValue:
+    def test_blank_string_is_treated_as_unset(self):
+        # What MONTHLY_LOSS_LIMIT= becomes once a real .env/EnvironmentFile
+        # is sourced as literal shell env vars (systemd, install.sh, ...),
+        # as opposed to python-dotenv parsing it straight from a file.
+        settings = Settings(_env_file=None, monthly_loss_limit="")
+        assert settings.monthly_loss_limit is None
+
+    def test_a_real_value_still_parses(self):
+        settings = Settings(_env_file=None, monthly_loss_limit="150")
+        assert settings.monthly_loss_limit == 150.0
