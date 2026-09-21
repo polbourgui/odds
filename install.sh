@@ -40,15 +40,35 @@ if ! command -v apt-get >/dev/null 2>&1; then
 fi
 
 # 1. System packages ----------------------------------------------------
+# Node.js comes from NodeSource, not the distro's own nodejs package: on
+# Ubuntu 24.04 (and most current Debian/Ubuntu releases) `apt install
+# nodejs` pulls Node 18, but this frontend's toolchain (Vite/rolldown,
+# oxlint, React Router 7) needs Node >=20.19, and Node 18 fails outright
+# (missing node:util's styleText, used by rolldown) rather than just
+# warning.
+NODE_MAJOR_REQUIRED=20
+
 if [[ "${SKIP_APT:-0}" != "1" ]]; then
   log "Installation des paquets système (sudo requis)"
   sudo apt-get update -qq
-  sudo apt-get install -y python3 python3-venv python3-pip postgresql postgresql-contrib nodejs npm
+  sudo apt-get install -y python3 python3-venv python3-pip postgresql postgresql-contrib curl ca-certificates
+
+  current_node_major="$(command -v node >/dev/null 2>&1 && node -e 'console.log(process.versions.node.split(".")[0])' || echo 0)"
+  if [[ "$current_node_major" -lt "$NODE_MAJOR_REQUIRED" ]]; then
+    log "Installation de Node.js 22.x (NodeSource — la version des dépôts Ubuntu est trop ancienne)"
+    curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+    sudo apt-get install -y nodejs
+  fi
 fi
 
 for cmd in python3 psql node npm; do
   command -v "$cmd" >/dev/null 2>&1 || die "'$cmd' est introuvable. Installe-le (ou relance sans SKIP_APT=1)."
 done
+
+node_major="$(node -e 'console.log(process.versions.node.split(".")[0])')"
+if [[ "$node_major" -lt "$NODE_MAJOR_REQUIRED" ]]; then
+  die "Node.js $(node -v) détecté, mais >=${NODE_MAJOR_REQUIRED} est requis pour builder le frontend. Installe une version récente (ex. via NodeSource: curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt-get install -y nodejs) puis relance avec SKIP_APT=1."
+fi
 
 # 2. PostgreSQL: start it, create role+db if missing (idempotent) -------
 log "Configuration de PostgreSQL"
